@@ -20,7 +20,7 @@ func init() {
 		//TODO
 		return New()
 	}).
-		AddMethod("string", "fetch json string", func(s *LState) int {
+		AddMethod("json", "fetch json string", func(s *LState) int {
 			v := check(s)
 			s.Push(LString(v.String()))
 			return 1
