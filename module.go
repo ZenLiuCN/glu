@@ -46,6 +46,14 @@ type (
 	}
 )
 
+func NewType(name string, top bool) *Type {
+	return &Type{Name: name, Top: top}
+}
+
+func NewModular(name string, top bool) *Modular {
+	return &Modular{Name: name, Top: top}
+}
+
 func (m *Modular) TopLevel() bool {
 	return m.Top
 }
@@ -199,7 +207,6 @@ func (m *Type) PreLoad(l *LState) {
 		l.SetField(mt, "__index", l.SetFuncs(l.NewTable(), fn))
 		l.SetFuncs(mt, hlp)
 	}
-
 }
 func (m Type) new(l *LState) int {
 	val := m.Ctor(l)
