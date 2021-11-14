@@ -48,9 +48,13 @@ type (
 	}
 )
 
-func helpFn(help string) LGFunction {
+func helpFn(help map[string]string) LGFunction {
 	return func(s *LState) int {
-		s.Push(LString(help))
+		if s.GetTop() == 0 {
+			s.Push(LString(help["?"]))
+		} else {
+			s.Push(LString(help[s.ToString(1)]))
+		}
 		return 1
 	}
 }
@@ -72,14 +76,15 @@ func (m *Modular) PreLoad(l *LState) {
 	l.PreloadModule(m.Name, func(l *LState) int {
 		mod := l.NewTable()
 		fn := make(map[string]LGFunction)
+		help := make(map[string]string)
 		if m.Help != "" {
-			fn["?"] = helpFn(m.Help)
+			help["?"] = m.Help
 		}
 		if len(m.Func) > 0 {
 			for s, info := range m.Func {
 				fn[s] = info.Func
 				if info.Help != "" {
-					fn[s+"?"] = helpFn(info.Help)
+					help[s] = info.Help
 				}
 			}
 		}
@@ -87,7 +92,7 @@ func (m *Modular) PreLoad(l *LState) {
 			for key, value := range m.Fields {
 				l.SetField(mod, key, value.Value)
 				if value.Help != "" {
-					fn[key+"?"] = helpFn(value.Help)
+					help[key+"?"] = value.Help
 				}
 			}
 		}
@@ -96,7 +101,9 @@ func (m *Modular) PreLoad(l *LState) {
 				t.PreloadSubModule(l, mod)
 			}
 		}
-
+		if len(help) > 0 {
+			fn["Help"] = helpFn(help)
+		}
 		if len(fn) > 0 {
 			l.SetFuncs(mod, fn)
 		}
@@ -110,23 +117,23 @@ func (m *Modular) PreloadSubModule(l *LState, t *LTable) {
 	}
 	mod := l.NewTable()
 	fn := make(map[string]LGFunction)
+	help := make(map[string]string)
 	if m.Help != "" {
-		fn["?"] = helpFn(m.Help)
+		help["?"] = m.Help
 	}
 	if len(m.Func) > 0 {
 		for s, info := range m.Func {
 			fn[s] = info.Func
 			if info.Help != "" {
-				fn[s+"?"] = helpFn(info.Help)
+				help[s] = info.Help
 			}
 		}
-		l.SetFuncs(mod, fn)
 	}
 	if len(m.Fields) > 0 {
 		for key, value := range m.Fields {
 			l.SetField(mod, key, value.Value)
 			if value.Help != "" {
-				fn[key+"?"] = helpFn(value.Help)
+				help[key+"?"] = value.Help
 			}
 		}
 	}
@@ -134,6 +141,9 @@ func (m *Modular) PreloadSubModule(l *LState, t *LTable) {
 		for _, t := range m.Submodule {
 			t.PreloadSubModule(l, mod)
 		}
+	}
+	if len(help) > 0 {
+		fn["Help"] = helpFn(help)
 	}
 	if len(fn) > 0 {
 		l.SetFuncs(mod, fn)
@@ -179,8 +189,9 @@ func (m *Type) PreLoad(l *LState) {
 	mt := l.NewTypeMetatable(m.Name)
 	l.SetGlobal(m.Name, mt)
 	fn := make(map[string]LGFunction)
+	help := make(map[string]string)
 	if m.Help != "" {
-		fn["new?"] = helpFn(m.Help)
+		help["?"] = m.Help
 	}
 	if m.Ctor != nil {
 		l.SetField(mt, "new", l.NewFunction(m.new))
@@ -189,16 +200,15 @@ func (m *Type) PreLoad(l *LState) {
 		for s, info := range m.Func {
 			fn[s] = info.Func
 			if info.Help != "" {
-				fn[s+"?"] = helpFn(info.Help)
+				help[s] = info.Help
 			}
 		}
-		l.SetFuncs(mt, fn)
 	}
 	if len(m.Fields) > 0 {
 		for key, value := range m.Fields {
 			l.SetField(mt, key, value.Value)
 			if value.Help != "" {
-				fn[key+"?"] = helpFn(value.Help)
+				help[key+"?"] = value.Help
 			}
 		}
 	}
@@ -212,11 +222,14 @@ func (m *Type) PreLoad(l *LState) {
 		for s, info := range m.Method {
 			method[s] = info.Func
 			if info.Help != "" {
-				fn[s+"?"] = helpFn(info.Help)
+				help[s] = info.Help
 			}
 		}
 		// methods
 		l.SetField(mt, "__index", l.SetFuncs(l.NewTable(), method))
+	}
+	if len(help) > 0 {
+		fn["Help"] = helpFn(help)
 	}
 	if len(fn) > 0 {
 		l.SetFuncs(mt, fn)
@@ -238,8 +251,9 @@ func (m *Type) PreloadSubModule(l *LState, t *LTable) {
 	mt := l.NewTypeMetatable(m.Name)
 	t.RawSetString(m.Name, mt)
 	fn := make(map[string]LGFunction)
+	help := make(map[string]string)
 	if m.Help != "" {
-		fn["new?"] = helpFn(m.Help)
+		help["?"] = m.Help
 	}
 	if m.Ctor != nil {
 		l.SetField(mt, "new", l.NewFunction(m.new))
@@ -248,16 +262,15 @@ func (m *Type) PreloadSubModule(l *LState, t *LTable) {
 		for s, info := range m.Func {
 			fn[s] = info.Func
 			if info.Help != "" {
-				fn[s+"?"] = helpFn(info.Help)
+				help[s] = info.Help
 			}
 		}
-		l.SetFuncs(mt, fn)
 	}
 	if len(m.Fields) > 0 {
 		for key, value := range m.Fields {
 			l.SetField(mt, key, value.Value)
 			if value.Help != "" {
-				fn[key+"?"] = helpFn(value.Help)
+				help[key+"?"] = value.Help
 			}
 		}
 	}
@@ -271,11 +284,14 @@ func (m *Type) PreloadSubModule(l *LState, t *LTable) {
 		for s, info := range m.Method {
 			method[s] = info.Func
 			if info.Help != "" {
-				fn[s+"?"] = helpFn(info.Help)
+				help[s] = info.Help
 			}
 		}
 		// methods
 		l.SetField(mt, "__index", l.SetFuncs(l.NewTable(), method))
+	}
+	if len(help) > 0 {
+		fn["Help"] = helpFn(help)
 	}
 	if len(fn) > 0 {
 		l.SetFuncs(mt, fn)

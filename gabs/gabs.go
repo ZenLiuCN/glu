@@ -15,7 +15,8 @@ func init() {
 		l.ArgError(1, "gabs expected")
 		return nil
 	}
-	t := gua.NewType("json", true, "json module", func(*LState) interface{} {
+	m := gua.NewModular("json", "json module", true)
+	t := gua.NewType("json", false, "json type", func(*LState) interface{} {
 		//TODO
 		return New()
 	}).
@@ -29,7 +30,8 @@ func init() {
 			s.Push(LString(v.String()))
 			return 1
 		})
+	m.AddModule(t)
 
-	gua.Registry = append(gua.Registry, t)
+	gua.Registry = append(gua.Registry, m)
 
 }
