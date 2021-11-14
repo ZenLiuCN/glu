@@ -31,6 +31,7 @@ type (
 	Modular struct {
 		Name      string
 		Top       bool
+		Help      string
 		Func      map[string]funcInfo
 		Fields    map[string]fieldInfo
 		Submodule []Module
@@ -38,20 +39,27 @@ type (
 	Type struct {
 		Name      string
 		Top       bool
+		Help      string
+		Ctor      func(*LState) interface{}
 		Func      map[string]funcInfo
 		Method    map[string]funcInfo
-		Ctor      func(*LState) interface{}
 		Fields    map[string]fieldInfo
 		Submodule []Module
 	}
 )
 
-func NewType(name string, top bool) *Type {
-	return &Type{Name: name, Top: top}
+func helpFn(help string) LGFunction {
+	return func(s *LState) int {
+		s.Push(LString(help))
+		return 1
+	}
+}
+func NewType(name string, top bool, help string, ctor func(*LState) interface{}) *Type {
+	return &Type{Name: name, Top: top, Help: help, Ctor: ctor}
 }
 
-func NewModular(name string, top bool) *Modular {
-	return &Modular{Name: name, Top: top}
+func NewModular(name string, help string, top bool) *Modular {
+	return &Modular{Name: name, Help: help, Top: top}
 }
 
 func (m *Modular) TopLevel() bool {
@@ -63,24 +71,23 @@ func (m *Modular) PreLoad(l *LState) {
 	}
 	l.PreloadModule(m.Name, func(l *LState) int {
 		mod := l.NewTable()
+		fn := make(map[string]LGFunction)
+		if m.Help != "" {
+			fn["?"] = helpFn(m.Help)
+		}
 		if len(m.Func) > 0 {
-			fn := make(map[string]LGFunction, len(m.Func)*2)
 			for s, info := range m.Func {
 				fn[s] = info.Func
 				if info.Help != "" {
-					fn[s+"?"] = func(l *LState) int {
-						l.Push(LString(info.Help))
-						return 1
-					}
+					fn[s+"?"] = helpFn(info.Help)
 				}
 			}
-			l.SetFuncs(mod, fn)
 		}
 		if len(m.Fields) > 0 {
 			for key, value := range m.Fields {
 				l.SetField(mod, key, value.Value)
 				if value.Help != "" {
-					l.SetField(mod, key+"?", LString(value.Help))
+					fn[key+"?"] = helpFn(value.Help)
 				}
 			}
 		}
@@ -88,6 +95,10 @@ func (m *Modular) PreLoad(l *LState) {
 			for _, t := range m.Submodule {
 				t.PreloadSubModule(l, mod)
 			}
+		}
+
+		if len(fn) > 0 {
+			l.SetFuncs(mod, fn)
 		}
 		l.Push(mod)
 		return 1
@@ -98,15 +109,15 @@ func (m *Modular) PreloadSubModule(l *LState, t *LTable) {
 		return
 	}
 	mod := l.NewTable()
+	fn := make(map[string]LGFunction)
+	if m.Help != "" {
+		fn["?"] = helpFn(m.Help)
+	}
 	if len(m.Func) > 0 {
-		fn := make(map[string]LGFunction, len(m.Func)*2)
 		for s, info := range m.Func {
 			fn[s] = info.Func
 			if info.Help != "" {
-				fn[s+"?"] = func(l *LState) int {
-					l.Push(LString(info.Help))
-					return 1
-				}
+				fn[s+"?"] = helpFn(info.Help)
 			}
 		}
 		l.SetFuncs(mod, fn)
@@ -115,7 +126,7 @@ func (m *Modular) PreloadSubModule(l *LState, t *LTable) {
 		for key, value := range m.Fields {
 			l.SetField(mod, key, value.Value)
 			if value.Help != "" {
-				l.SetField(mod, key+"?", LString(value.Help))
+				fn[key+"?"] = helpFn(value.Help)
 			}
 		}
 	}
@@ -124,33 +135,38 @@ func (m *Modular) PreloadSubModule(l *LState, t *LTable) {
 			t.PreloadSubModule(l, mod)
 		}
 	}
+	if len(fn) > 0 {
+		l.SetFuncs(mod, fn)
+	}
 	l.SetField(t, m.Name, mod)
 }
 
-func (m *Modular) AddFunc(name string, help string, fn LGFunction) error {
+func (m *Modular) AddFunc(name string, help string, fn LGFunction) *Modular {
 	if m.Func == nil {
 		m.Func = make(map[string]funcInfo)
 	} else if _, ok := m.Func[name]; ok {
-		return ErrAlreadyExists
+		panic(ErrAlreadyExists)
 	}
 	m.Func[name] = funcInfo{help, fn}
-	return nil
+	return m
+
 }
-func (m *Modular) AddField(name string, help string, value LValue) error {
+func (m *Modular) AddField(name string, help string, value LValue) *Modular {
 	if m.Fields == nil {
 		m.Fields = make(map[string]fieldInfo)
 	} else if _, ok := m.Fields[name]; ok {
-		return ErrAlreadyExists
+		panic(ErrAlreadyExists)
 	}
 	m.Fields[name] = fieldInfo{help, value}
-	return nil
+	return m
 }
-func (m *Modular) AddModule(mod Module) error {
+func (m *Modular) AddModule(mod Module) *Modular {
 	if mod.TopLevel() {
-		return ErrIsTop
+		panic(ErrIsTop)
 	}
 	m.Submodule = append(m.Submodule, mod)
-	return nil
+	return m
+
 }
 
 func (m *Type) TopLevel() bool {
@@ -162,18 +178,18 @@ func (m *Type) PreLoad(l *LState) {
 	}
 	mt := l.NewTypeMetatable(m.Name)
 	l.SetGlobal(m.Name, mt)
+	fn := make(map[string]LGFunction)
+	if m.Help != "" {
+		fn["new?"] = helpFn(m.Help)
+	}
 	if m.Ctor != nil {
 		l.SetField(mt, "new", l.NewFunction(m.new))
 	}
 	if len(m.Func) > 0 {
-		fn := make(map[string]LGFunction, len(m.Func)*2)
 		for s, info := range m.Func {
 			fn[s] = info.Func
 			if info.Help != "" {
-				fn[s+"?"] = func(l *LState) int {
-					l.Push(LString(info.Help))
-					return 1
-				}
+				fn[s+"?"] = helpFn(info.Help)
 			}
 		}
 		l.SetFuncs(mt, fn)
@@ -182,7 +198,7 @@ func (m *Type) PreLoad(l *LState) {
 		for key, value := range m.Fields {
 			l.SetField(mt, key, value.Value)
 			if value.Help != "" {
-				l.SetField(mt, key+"?", LString(value.Help))
+				fn[key+"?"] = helpFn(value.Help)
 			}
 		}
 	}
@@ -192,21 +208,20 @@ func (m *Type) PreLoad(l *LState) {
 		}
 	}
 	if len(m.Method) > 0 {
-		fn := make(map[string]LGFunction, len(m.Func))
-		hlp := make(map[string]LGFunction, len(m.Func))
+		method := make(map[string]LGFunction, len(m.Func))
 		for s, info := range m.Method {
-			fn[s] = info.Func
+			method[s] = info.Func
 			if info.Help != "" {
-				hlp[s+"?"] = func(l *LState) int {
-					l.Push(LString(info.Help))
-					return 1
-				}
+				fn[s+"?"] = helpFn(info.Help)
 			}
 		}
 		// methods
-		l.SetField(mt, "__index", l.SetFuncs(l.NewTable(), fn))
-		l.SetFuncs(mt, hlp)
+		l.SetField(mt, "__index", l.SetFuncs(l.NewTable(), method))
 	}
+	if len(fn) > 0 {
+		l.SetFuncs(mt, fn)
+	}
+
 }
 func (m Type) new(l *LState) int {
 	val := m.Ctor(l)
@@ -222,18 +237,18 @@ func (m *Type) PreloadSubModule(l *LState, t *LTable) {
 	}
 	mt := l.NewTypeMetatable(m.Name)
 	t.RawSetString(m.Name, mt)
+	fn := make(map[string]LGFunction)
+	if m.Help != "" {
+		fn["new?"] = helpFn(m.Help)
+	}
 	if m.Ctor != nil {
 		l.SetField(mt, "new", l.NewFunction(m.new))
 	}
 	if len(m.Func) > 0 {
-		fn := make(map[string]LGFunction, len(m.Func)*2)
 		for s, info := range m.Func {
 			fn[s] = info.Func
 			if info.Help != "" {
-				fn[s+"?"] = func(l *LState) int {
-					l.Push(LString(info.Help))
-					return 1
-				}
+				fn[s+"?"] = helpFn(info.Help)
 			}
 		}
 		l.SetFuncs(mt, fn)
@@ -242,7 +257,7 @@ func (m *Type) PreloadSubModule(l *LState, t *LTable) {
 		for key, value := range m.Fields {
 			l.SetField(mt, key, value.Value)
 			if value.Help != "" {
-				l.SetField(mt, key+"?", LString(value.Help))
+				fn[key+"?"] = helpFn(value.Help)
 			}
 		}
 	}
@@ -252,53 +267,51 @@ func (m *Type) PreloadSubModule(l *LState, t *LTable) {
 		}
 	}
 	if len(m.Method) > 0 {
-		fn := make(map[string]LGFunction, len(m.Func))
-		hlp := make(map[string]LGFunction, len(m.Func))
+		method := make(map[string]LGFunction, len(m.Func))
 		for s, info := range m.Method {
-			fn[s] = info.Func
+			method[s] = info.Func
 			if info.Help != "" {
-				hlp[s+"?"] = func(l *LState) int {
-					l.Push(LString(info.Help))
-					return 1
-				}
+				fn[s+"?"] = helpFn(info.Help)
 			}
 		}
 		// methods
-		l.SetField(mt, "__index", l.SetFuncs(l.NewTable(), fn))
-		l.SetFuncs(mt, hlp)
+		l.SetField(mt, "__index", l.SetFuncs(l.NewTable(), method))
+	}
+	if len(fn) > 0 {
+		l.SetFuncs(mt, fn)
 	}
 }
-func (m *Type) AddFunc(name string, help string, fn LGFunction) error {
+func (m *Type) AddFunc(name string, help string, fn LGFunction) *Type {
 	if m.Func == nil {
 		m.Func = make(map[string]funcInfo)
 	} else if _, ok := m.Func[name]; ok {
-		return ErrAlreadyExists
+		panic(ErrAlreadyExists)
 	}
 	m.Func[name] = funcInfo{help, fn}
-	return nil
+	return m
 }
-func (m *Type) AddField(name string, help string, value LValue) error {
+func (m *Type) AddField(name string, help string, value LValue) *Type {
 	if m.Fields == nil {
 		m.Fields = make(map[string]fieldInfo)
 	} else if _, ok := m.Fields[name]; ok {
-		return ErrAlreadyExists
+		panic(ErrAlreadyExists)
 	}
 	m.Fields[name] = fieldInfo{help, value}
-	return nil
+	return m
 }
-func (m *Type) AddMethod(name string, help string, value LGFunction) error {
+func (m *Type) AddMethod(name string, help string, value LGFunction) *Type {
 	if m.Method == nil {
 		m.Method = make(map[string]funcInfo)
 	} else if _, ok := m.Method[name]; ok {
-		return ErrAlreadyExists
+		panic(ErrAlreadyExists)
 	}
 	m.Method[name] = funcInfo{help, value}
-	return nil
+	return m
 }
-func (m *Type) AddModule(mod Module) error {
+func (m *Type) AddModule(mod Module) *Type {
 	if mod.TopLevel() {
-		return ErrIsTop
+		panic(ErrIsTop)
 	}
 	m.Submodule = append(m.Submodule, mod)
-	return nil
+	return m
 }
