@@ -341,6 +341,14 @@ func (m Type) New(l *LState, val interface{}) int {
 	return 1
 }
 
+//NewValue create new LValue
+func (m Type) NewValue(l *LState, val interface{}) *LUserData {
+	ud := l.NewUserData()
+	ud.Value = val
+	l.SetMetatable(ud, l.GetTypeMetatable(m.Name))
+	return ud
+}
+
 //new internal creator
 func (m Type) new(l *LState) int {
 	val := m.constructor(l)

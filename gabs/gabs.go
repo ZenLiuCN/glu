@@ -6,14 +6,22 @@ import (
 	"gua"
 )
 
-func init() {
-	check := func(l *LState) *Container {
-		ud := l.CheckUserData(1)
+var (
+	JsonType      *gua.Type
+	JsonModule    *gua.Modular
+	JsonTypeCheck = func(l *LState, n int) *Container {
+		ud := l.CheckUserData(n)
 		if v, ok := ud.Value.(*Container); ok {
 			return v
 		}
-		l.ArgError(1, "json expected")
+		l.ArgError(1, "json.Json expected")
 		return nil
+	}
+)
+
+func init() {
+	check := func(l *LState) *Container {
+		return JsonTypeCheck(l, 1)
 	}
 	m := gua.NewModular("json", `module json is wrap of jeffail/gabs as dynamic json tool.
 json.Json  ==> type, json container.
@@ -241,7 +249,7 @@ json.Json  ==> type, json container.
 				}
 				return 1
 			}).
-		AddMethod("object", `Json:object(path string)bool  ==> check if it's object at path'.`,
+		AddMethod("object", `Json:object(path string)bool  ==> check if it's object at path.`,
 			func(s *LState) int {
 				v := check(s)
 				s.CheckType(2, LTString)
@@ -256,7 +264,55 @@ json.Json  ==> type, json container.
 					}
 				}
 				return 1
+			}).
+		AddMethod("asBool", `Json:asBool(path string)bool  ==> fetch value as boolean, if not exists return false.`,
+			func(s *LState) int {
+				v := check(s)
+				s.CheckType(2, LTString)
+				p := s.ToString(2)
+				if !v.ExistsP(p) {
+					s.Push(LFalse)
+				} else if b, ok := v.Path(p).Data().(bool); !ok {
+					s.RaiseError("value not bool")
+					return 0
+				} else if b {
+					s.Push(LTrue)
+				} else {
+					s.Push(LFalse)
+				}
+				return 1
+			}).
+		AddMethod("asString", `Json:asString(path string)string  ==> fetch value as string, if not exists return nil.`,
+			func(s *LState) int {
+				v := check(s)
+				s.CheckType(2, LTString)
+				p := s.ToString(2)
+				if !v.ExistsP(p) {
+					s.Push(LNil)
+				} else if b, ok := v.Path(p).Data().(string); !ok {
+					s.RaiseError("value not string")
+					return 0
+				} else {
+					s.Push(LString(b))
+				}
+				return 1
+			}).
+		AddMethod("asNumber", `Json:asNumber(path string)number  ==> fetch value as number, if not exists return nil.`,
+			func(s *LState) int {
+				v := check(s)
+				s.CheckType(2, LTString)
+				p := s.ToString(2)
+				if !v.ExistsP(p) {
+					s.Push(LNil)
+				} else if b, ok := v.Path(p).Data().(float64); !ok {
+					s.RaiseError("value not string")
+					return 0
+				} else {
+					s.Push(LNumber(b))
+				}
+				return 1
 			})
+
 	m.AddFunc("from", `json.from(val table|number|string|boolean)Json ==> create json from value`,
 		func(s *LState) int {
 			s.CheckTypes(1, LTString, LTNumber, LTBool, LTTable)
@@ -282,7 +338,9 @@ json.Json  ==> type, json container.
 			}
 		})
 	m.AddModule(t)
-	gua.Registry = append(gua.Registry, m)
+	JsonType = t
+	JsonModule = m
+	gua.Registry = append(gua.Registry, JsonModule)
 
 }
 func parseTable(t *LTable, g *Container) *Container {
