@@ -1,13 +1,12 @@
 package json
 
 import (
-	"gua"
+	"glu"
 	"testing"
 )
 
 func TestJsonNew(t *testing.T) {
-	gua.Auto = true
-	s := gua.Get()
+	s := glu.Get()
 	err := s.DoString(`
 local json=require('json')
 local newJson=json.Json.new
