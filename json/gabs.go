@@ -1,14 +1,14 @@
-package gabs
+package json
 
 import (
 	. "github.com/Jeffail/gabs/v2"
 	. "github.com/yuin/gopher-lua"
-	"gua"
+	"glu"
 )
 
 var (
-	JsonType      *gua.Type
-	JsonModule    *gua.Modular
+	JsonType      *glu.Type
+	JsonModule    *glu.Module
 	JsonTypeCheck = func(l *LState, n int) *Container {
 		ud := l.CheckUserData(n)
 		if v, ok := ud.Value.(*Container); ok {
@@ -23,10 +23,10 @@ func init() {
 	check := func(l *LState) *Container {
 		return JsonTypeCheck(l, 1)
 	}
-	m := gua.NewModular("json", `module json is wrap of jeffail/gabs as dynamic json tool.
+	m := glu.NewModular("json", `module json is wrap of jeffail/gabs as dynamic json tool.
 json.Json  ==> type, json container.
 `, true)
-	t := gua.NewType("Json", false, `Json.new(json string?)Json? ==> create Json instance.`,
+	t := glu.NewType("Json", false, `Json.new(json string?)Json? ==> create Json instance.`,
 		func(s *LState) interface{} {
 			if s.GetTop() == 1 {
 				s.CheckType(1, LTString)
@@ -340,7 +340,7 @@ json.Json  ==> type, json container.
 	m.AddModule(t)
 	JsonType = t
 	JsonModule = m
-	gua.Registry = append(gua.Registry, JsonModule)
+	glu.Registry = append(glu.Registry, JsonModule)
 
 }
 func parseTable(t *LTable, g *Container) *Container {

@@ -1,4 +1,4 @@
-package gua
+package glu
 
 import (
 	. "github.com/yuin/gopher-lua"
@@ -7,16 +7,17 @@ import (
 
 var (
 	//Option LState configuration
-	Option Options = Options{}
-	pool   *p
+	Option   Options = Options{}
+	PoolSize         = 4
+	pool     *statePool
 )
 
-//MakePool manual create pool , when need to change Option, should invoke once before use Get and Put
+//MakePool manual create statePool , when need to change Option, should invoke once before use Get and Put
 func MakePool() {
 	pool = create()
 }
 
-//Get LState from pool
+//Get LState from statePool
 func Get() *LState {
 	if pool == nil {
 		MakePool()
@@ -24,7 +25,7 @@ func Get() *LState {
 	return pool.get()
 }
 
-//Put LState back to pool
+//Put LState back to statePool
 func Put(s *LState) {
 	if pool == nil {
 		MakePool()
@@ -34,28 +35,47 @@ func Put(s *LState) {
 
 var (
 	//Auto if true, will auto-load modules in Registry
-	Auto = false
+	Auto = true
 )
 
 //region Pool
-type p struct {
-	p sync.Pool
+type statePool struct {
+	m     sync.Mutex
+	saved []*LState
 }
 
-func create() *p {
-	return &p{sync.Pool{
-		New: func() interface{} {
-			L := NewState(Option)
-			configurer(L)
-			return L
-		},
-	}}
+func create() *statePool {
+	return &statePool{saved: make([]*LState, 0, PoolSize)}
 }
-func (x *p) get() *LState {
-	return x.p.Get().(*LState)
+
+func (pl *statePool) get() *LState {
+	pl.m.Lock()
+	defer pl.m.Unlock()
+	n := len(pl.saved)
+	if n == 0 {
+		return pl.new()
+	}
+	x := pl.saved[n-1]
+	pl.saved = pl.saved[0 : n-1]
+	return x
 }
-func (x *p) put(s *LState) {
-	x.p.Put(s)
+
+func (pl *statePool) new() *LState {
+	L := NewState(Option)
+	configurer(L)
+	return L
+}
+
+func (pl *statePool) put(L *LState) {
+	pl.m.Lock()
+	defer pl.m.Unlock()
+	pl.saved = append(pl.saved, L)
+}
+
+func (pl *statePool) Shutdown() {
+	for _, L := range pl.saved {
+		L.Close()
+	}
 }
 
 //endregion

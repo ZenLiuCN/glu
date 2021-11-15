@@ -1,4 +1,4 @@
-module gua
+module glu
 
 go 1.9
 

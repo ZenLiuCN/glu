@@ -1,4 +1,4 @@
-package gabs
+package json
 
 import (
 	"gua"

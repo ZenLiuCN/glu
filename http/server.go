@@ -1,4 +1,4 @@
-package mux
+package http
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 	"github.com/gorilla/mux"
 	. "github.com/yuin/gopher-lua"
 	"github.com/yuin/gopher-lua/parse"
-	"gua"
-	gabs2 "gua/gabs"
+	"glu"
+	gabs2 "glu/json"
 	"io"
 	"io/ioutil"
 	"log"
@@ -23,15 +23,25 @@ import (
 )
 
 var (
-	CtxType    *gua.Type
-	ServerType *gua.Type
-	HttpModule *gua.Modular
+	CtxType    *glu.Type
+	ServerType *glu.Type
+	HttpModule *glu.Module
 )
 
 func init() {
-	HttpModule = gua.NewModular("http", `http module built on net/http gorilla/mux, requires json module.
+	HttpModule = glu.NewModular("http", `http module built on net/http gorilla/mux, requires json module.
 http.Ctx    ctx type is an wrap on http.Request and http.ResponseWriter, should never call new!
 http.Server server type is wrap with mux.Router and http.Server.
+IMPORTANT: Server handler should be an independent lua function in string form, minimal sample as below:
+local http=require('http')
+local json=require('json')
+local server=http.Server.new(':8081')
+server:get('/',[[
+local c=...
+c:sendJson(c:query('p'))
+]])
+server:start(false)
+while (true) do	end
 `, true)
 	chkCtx := func(s *LState) *Ctx {
 		ud := s.CheckUserData(1)
@@ -41,7 +51,7 @@ http.Server server type is wrap with mux.Router and http.Server.
 		s.ArgError(1, "http.Ctx expected")
 		return nil
 	}
-	CtxType = gua.NewType("Ctx", false, ``,
+	CtxType = glu.NewType("Ctx", false, ``,
 		func(s *LState) interface{} {
 			s.RaiseError("not allow to create ctx instance")
 			return nil
@@ -58,6 +68,12 @@ http.Server server type is wrap with mux.Router and http.Server.
 				v := chkCtx(s)
 				s.CheckType(2, LTString)
 				s.Push(LString(v.Header(s.ToString(2))))
+				return 1
+			}).
+		AddMethod("query", `Ctx:query(name string)string ==> fetch request query parameter`,
+			func(s *LState) int {
+				v := chkCtx(s)
+				s.Push(LString(v.Query(s.CheckString(2))))
 				return 1
 			}).
 		AddMethod("method", `Ctx:method()string ==> fetch request method`,
@@ -119,7 +135,7 @@ http.Server server type is wrap with mux.Router and http.Server.
 		s.ArgError(1, "http.Server expected")
 		return nil
 	}
-	ServerType = gua.NewType("Server", false, `Server.new(addr string)`,
+	ServerType = glu.NewType("Server", false, `Server.new(addr string)`,
 		func(s *LState) interface{} {
 			s.CheckType(1, LTString)
 			return NewServer(s.ToString(1), func(s string) {
@@ -148,6 +164,7 @@ http.Server server type is wrap with mux.Router and http.Server.
 				return 1
 			}).
 		AddMethod("start", `Server:start(
+    cors bool,                          ==> enable cors or not,default false.
 	allowHeader    []string?,           ==> cors config for header allowed.
 	allowedMethods []string?,           ==> cors config for methods allowed.
 	allowedOrigins []string?,           ==> cors config for origin allowed.
@@ -157,20 +174,21 @@ http.Server server type is wrap with mux.Router and http.Server.
 )                                       ==> start server,should only call once.`,
 			func(s *LState) int {
 				v := chkServer(s)
-				if s.GetTop() == 1 {
-					v.Start(nil, nil, nil, nil, 0, 0)
+				c := s.CheckBool(2)
+				if !c {
+					v.Start(false, nil, nil, nil, nil, 0, 0)
 				} else if s.GetTop() == 2 {
-					v.Start(tableToSlice(s, 2), nil, nil, nil, 0, 0)
+					v.Start(true, tableToSlice(s, 2), nil, nil, nil, 0, 0)
 				} else if s.GetTop() == 3 {
-					v.Start(tableToSlice(s, 2), tableToSlice(s, 3), nil, nil, 0, 0)
+					v.Start(true, tableToSlice(s, 2), tableToSlice(s, 3), nil, nil, 0, 0)
 				} else if s.GetTop() == 4 {
-					v.Start(tableToSlice(s, 2), tableToSlice(s, 3),
+					v.Start(true, tableToSlice(s, 2), tableToSlice(s, 3),
 						tableToSlice(s, 4), nil, 0, 0)
 				} else if s.GetTop() == 5 {
-					v.Start(tableToSlice(s, 2), tableToSlice(s, 3),
+					v.Start(true, tableToSlice(s, 2), tableToSlice(s, 3),
 						tableToSlice(s, 4), tableToSlice(s, 5), 0, 0)
 				} else if s.GetTop() == 6 {
-					v.Start(tableToSlice(s, 2), tableToSlice(s, 3),
+					v.Start(true, tableToSlice(s, 2), tableToSlice(s, 3),
 						tableToSlice(s, 4), tableToSlice(s, 5), s.CheckInt(6), 0)
 				} else if s.GetTop() == 7 {
 					b := s.CheckBool(7)
@@ -178,7 +196,7 @@ http.Server server type is wrap with mux.Router and http.Server.
 					if b {
 						t = 1
 					}
-					v.Start(tableToSlice(s, 2), tableToSlice(s, 3),
+					v.Start(true, tableToSlice(s, 2), tableToSlice(s, 3),
 						tableToSlice(s, 4), tableToSlice(s, 5), s.CheckInt(6), t)
 				} else {
 					s.RaiseError("invalid arguments for http.Server:start")
@@ -197,8 +215,8 @@ code string) ==> register handler without method limit.`,
 					return 0
 				}
 				v.Route(route, func(ctx *Ctx) {
-					x := gua.Get()
-					defer gua.Put(x)
+					x := glu.Get()
+					defer glu.Put(x)
 					fn := x.NewFunctionFromProto(chunk)
 					x.Push(fn)
 					_ = CtxType.New(x, ctx)
@@ -210,8 +228,7 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("get", `Server:get(path string,  ==> code should be string code slice with function handle http.Ctx
-code string) ==> register handler limit with GET.`,
+		AddMethod("get", `Server:get(path string, handler string) ==> register handler limit with GET.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
@@ -222,21 +239,11 @@ code string) ==> register handler limit with GET.`,
 					return 0
 				}
 				v.Get(route, func(ctx *Ctx) {
-					x := gua.Get()
-					defer gua.Put(x)
-					fn := x.NewFunctionFromProto(chunk)
-					x.Push(fn)
-					_ = CtxType.New(x, ctx)
-					err = x.PCall(1, 0, nil)
-					if err != nil {
-						ctx.SendStatus(500)
-						return
-					}
+					executeHandler(chunk, ctx)
 				})
 				return 0
 			}).
-		AddMethod("post", `Server:post(path string,  ==> code should be string code slice with function handle http.Ctx
-code string) ==> register handler limit with POST.`,
+		AddMethod("post", `Server:post(path string, handler string) ==> register handler limit with POST.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
@@ -247,21 +254,11 @@ code string) ==> register handler limit with POST.`,
 					return 0
 				}
 				v.Post(route, func(ctx *Ctx) {
-					x := gua.Get()
-					defer gua.Put(x)
-					fn := x.NewFunctionFromProto(chunk)
-					x.Push(fn)
-					_ = CtxType.New(x, ctx)
-					err = x.PCall(1, 0, nil)
-					if err != nil {
-						ctx.SendStatus(500)
-						return
-					}
+					executeHandler(chunk, ctx)
 				})
 				return 0
 			}).
-		AddMethod("put", `Server:put(path string,  ==> code should be string code slice with function handle http.Ctx
-code string) ==> register handler limit with POST.`,
+		AddMethod("put", `Server:put(path string, handler string) ==> register handler limit with POST.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
@@ -272,21 +269,11 @@ code string) ==> register handler limit with POST.`,
 					return 0
 				}
 				v.Put(route, func(ctx *Ctx) {
-					x := gua.Get()
-					defer gua.Put(x)
-					fn := x.NewFunctionFromProto(chunk)
-					x.Push(fn)
-					_ = CtxType.New(x, ctx)
-					err = x.PCall(1, 0, nil)
-					if err != nil {
-						ctx.SendStatus(500)
-						return
-					}
+					executeHandler(chunk, ctx)
 				})
 				return 0
 			}).
-		AddMethod("head", `Server:head(path string,  ==> code should be string code slice with function handle http.Ctx
-code string) ==> register handler limit with HEAD.`,
+		AddMethod("head", `Server:head(path string,handler string) ==> register handler limit with HEAD.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
@@ -297,21 +284,11 @@ code string) ==> register handler limit with HEAD.`,
 					return 0
 				}
 				v.Head(route, func(ctx *Ctx) {
-					x := gua.Get()
-					defer gua.Put(x)
-					fn := x.NewFunctionFromProto(chunk)
-					x.Push(fn)
-					_ = CtxType.New(x, ctx)
-					err = x.PCall(1, 0, nil)
-					if err != nil {
-						ctx.SendStatus(500)
-						return
-					}
+					executeHandler(chunk, ctx)
 				})
 				return 0
 			}).
-		AddMethod("patch", `Server:patch(path string,  ==> code should be string code slice with function handle http.Ctx
-code string) ==> register handler limit with PATCH.`,
+		AddMethod("patch", `Server:patch(path string,handler string) ==> register handler limit with PATCH.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
@@ -322,21 +299,11 @@ code string) ==> register handler limit with PATCH.`,
 					return 0
 				}
 				v.Patch(route, func(ctx *Ctx) {
-					x := gua.Get()
-					defer gua.Put(x)
-					fn := x.NewFunctionFromProto(chunk)
-					x.Push(fn)
-					_ = CtxType.New(x, ctx)
-					err = x.PCall(1, 0, nil)
-					if err != nil {
-						ctx.SendStatus(500)
-						return
-					}
+					executeHandler(chunk, ctx)
 				})
 				return 0
 			}).
-		AddMethod("delete", `Server:delete(path string,  ==> code should be string code slice with function handle http.Ctx
-code string) ==> register handler limit with DELETE.`,
+		AddMethod("delete", `Server:delete(path string,handler string) ==> register handler limit with DELETE.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
@@ -347,21 +314,11 @@ code string) ==> register handler limit with DELETE.`,
 					return 0
 				}
 				v.Delete(route, func(ctx *Ctx) {
-					x := gua.Get()
-					defer gua.Put(x)
-					fn := x.NewFunctionFromProto(chunk)
-					x.Push(fn)
-					_ = CtxType.New(x, ctx)
-					err = x.PCall(1, 0, nil)
-					if err != nil {
-						ctx.SendStatus(500)
-						return
-					}
+					executeHandler(chunk, ctx)
 				})
 				return 0
 			}).
-		AddMethod("connect", `Server:connect(path string,  ==> code should be string code slice with function handle http.Ctx
-code string) ==> register handler limit with CONNECT.`,
+		AddMethod("connect", `Server:connect(path string,handler string) ==> register handler limit with CONNECT.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
@@ -372,21 +329,11 @@ code string) ==> register handler limit with CONNECT.`,
 					return 0
 				}
 				v.Connect(route, func(ctx *Ctx) {
-					x := gua.Get()
-					defer gua.Put(x)
-					fn := x.NewFunctionFromProto(chunk)
-					x.Push(fn)
-					_ = CtxType.New(x, ctx)
-					err = x.PCall(1, 0, nil)
-					if err != nil {
-						ctx.SendStatus(500)
-						return
-					}
+					executeHandler(chunk, ctx)
 				})
 				return 0
 			}).
-		AddMethod("options", `Server:options(path string,  ==> code should be string code slice with function handle http.Ctx
-code string) ==> register handler limit with OPTIONS.should not use if with cors enable`,
+		AddMethod("options", `Server:options(path string,handler string) ==> register handler limit with OPTIONS.should not use if with cors enable`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
@@ -397,21 +344,11 @@ code string) ==> register handler limit with OPTIONS.should not use if with cors
 					return 0
 				}
 				v.Options(route, func(ctx *Ctx) {
-					x := gua.Get()
-					defer gua.Put(x)
-					fn := x.NewFunctionFromProto(chunk)
-					x.Push(fn)
-					_ = CtxType.New(x, ctx)
-					err = x.PCall(1, 0, nil)
-					if err != nil {
-						ctx.SendStatus(500)
-						return
-					}
+					executeHandler(chunk, ctx)
 				})
 				return 0
 			}).
-		AddMethod("trace", `Server:trace(path string,  ==> code should be string code slice with function handle http.Ctx
-code string) ==> register handler limit with TRACE.`,
+		AddMethod("trace", `Server:trace(path string,handler string) ==> register handler limit with TRACE.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
@@ -422,16 +359,7 @@ code string) ==> register handler limit with TRACE.`,
 					return 0
 				}
 				v.Trace(route, func(ctx *Ctx) {
-					x := gua.Get()
-					defer gua.Put(x)
-					fn := x.NewFunctionFromProto(chunk)
-					x.Push(fn)
-					_ = CtxType.New(x, ctx)
-					err = x.PCall(1, 0, nil)
-					if err != nil {
-						ctx.SendStatus(500)
-						return
-					}
+					executeHandler(chunk, ctx)
 				})
 				return 0
 			}).
@@ -447,7 +375,23 @@ code string) ==> register handler limit with TRACE.`,
 
 	HttpModule.AddModule(CtxType)
 	HttpModule.AddModule(ServerType)
-	gua.Registry = append(gua.Registry, HttpModule)
+	glu.Registry = append(glu.Registry, HttpModule)
+}
+func executeHandler(chunk *FunctionProto, c *Ctx) {
+	x := glu.Get()
+	defer glu.Put(x)
+	fn := x.NewFunctionFromProto(chunk)
+	x.Push(fn)
+	_ = CtxType.New(x, c)
+	err := x.PCall(1, 0, nil)
+	if err != nil {
+		c.SendStatus(500)
+		g := gabs.New()
+		g.Set(err.Error(), "error")
+		c.Send(g)
+		fmt.Printf("error handle %+v : %s", c.URL, err)
+		return
+	}
 }
 func compile(code string, path string) (*FunctionProto, error) {
 	name := fmt.Sprintf("handler(%s)", path)
@@ -486,6 +430,9 @@ func (c *Ctx) Vars(name string) string {
 }
 func (c *Ctx) Header(name string) string {
 	return c.Request.Header.Get(name)
+}
+func (c *Ctx) Query(name string) string {
+	return c.Request.URL.Query().Get(name)
 }
 func (c *Ctx) Method() string {
 	return c.Request.Method
@@ -550,6 +497,7 @@ func (s *Server) Running() bool {
 	return s.status != 0
 }
 func (s *Server) Start(
+	cors bool,
 	allowHeader []string,
 	allowedMethods []string,
 	allowedOrigins []string,
@@ -557,7 +505,12 @@ func (s *Server) Start(
 	maxAge int,
 	allowCredentials int,
 ) {
-	if allowHeader == nil &&
+	if !cors {
+		s.Server = &http.Server{
+			Addr:    s.Addr,
+			Handler: handlers.RecoveryHandler()(s.Router),
+		}
+	} else if allowHeader == nil &&
 		allowedMethods == nil &&
 		allowedOrigins == nil &&
 		exposedHeaders == nil &&
@@ -611,6 +564,7 @@ func (s *Server) Start(
 			}
 			s.mux.Unlock()
 		}
+		log.Println("http start at ", s.Addr)
 		if err := s.ListenAndServe(); err != nil && !errors.Is(http.ErrServerClosed, err) && s.log != nil {
 			s.log(fmt.Sprintf("close server fail: %s", err))
 		}
