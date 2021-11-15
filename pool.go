@@ -6,25 +6,36 @@ import (
 )
 
 var (
+	//Option LState configuration
 	Option Options = Options{}
 	pool   *p
 )
 
+//MakePool manual create pool , when need to change Option, should invoke once before use Get and Put
 func MakePool() {
 	pool = create()
 }
+
+//Get LState from pool
 func Get() *LState {
 	if pool == nil {
 		MakePool()
 	}
 	return pool.get()
 }
+
+//Put LState back to pool
 func Put(s *LState) {
 	if pool == nil {
 		MakePool()
 	}
 	pool.put(s)
 }
+
+var (
+	//Auto if true, will auto-load modules in Registry
+	Auto = false
+)
 
 //region Pool
 type p struct {
@@ -49,7 +60,10 @@ func (x *p) put(s *LState) {
 
 //endregion
 func configurer(l *LState) {
-	for _, module := range Registry {
-		module.PreLoad(l)
+	if Auto {
+		for _, module := range Registry {
+			module.PreLoad(l)
+		}
 	}
+
 }
