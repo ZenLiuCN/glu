@@ -43,7 +43,7 @@ var (
 //StatePool threadsafe LState Pool
 type StatePool struct {
 	m     sync.Mutex
-	saved []*LState
+	saved []*LState //TODO replace with more effective structure
 	ctor  func() *LState
 }
 

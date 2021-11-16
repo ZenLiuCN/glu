@@ -29,8 +29,8 @@ func init() {
 	HttpModule = glu.NewModular("http", `http module built on net/http gorilla/mux, requires json module.
 http.Ctx       ctx type is an wrap on http.Request and http.ResponseWriter, should never call new!
 http.Res       res type is an wrap on http.Response , should never call new!
-http.Client    client type is an wrap of http.Client.
-http.Server server type is wrap with mux.Router and http.Server.
+http.Client    client type is an wrap of http.Client. remember to call Client:release when not needed.
+http.Server server type is wrap with mux.Router and http.Server. remember to call Server:stop and Server:release when not needed.
 IMPORTANT: Server handler should be an independent lua function in Chunk form, minimal sample as below:
 local http=require('http')
 local json=require('json')
@@ -612,9 +612,10 @@ code string) ==> register handler without method limit.`,
 	glu.Registry = append(glu.Registry, HttpModule)
 }
 func executeHandler(chunk *FunctionProto, c *Ctx) {
-	if err := glu.ExecuteChunk(chunk, 1, 0, glu.OpSafe(func(s *LState) {
+	if err := glu.ExecuteChunk(chunk, 1, 0, func(s *LState) error {
 		CtxType.New(s, c)
-	}), nil); err != nil {
+		return nil
+	}, nil); err != nil {
 		c.SetStatus(500)
 		c.SendString(err.Error())
 		fmt.Printf("handle error %+v : %s", c.URL, err)
