@@ -72,6 +72,7 @@ func (c *Ctx) SendFile(path string) error {
 }
 
 type Server struct {
+	ID     int64
 	status uint32
 	mux    sync.Mutex
 	Addr   string
@@ -81,7 +82,7 @@ type Server struct {
 }
 
 func NewServer(addr string, log func(string)) *Server {
-	return &Server{Addr: addr, Router: mux.NewRouter(), log: log}
+	return &Server{ID: time.Now().UnixNano(), Addr: addr, Router: mux.NewRouter(), log: log}
 }
 
 func (s *Server) Stop(n time.Duration) (error, context.CancelFunc) {

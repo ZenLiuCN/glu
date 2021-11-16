@@ -7,13 +7,14 @@ import (
 )
 
 type Client struct {
+	ID int64
 	http.Client
 }
 
 func NewClient(timeout time.Duration) *Client {
 	return &Client{Client: http.Client{
 		Timeout: timeout,
-	}}
+	}, ID: time.Now().UnixNano()}
 }
 
 func (c *Client) Get(url string) (*http.Response, error) {

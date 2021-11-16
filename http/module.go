@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/Jeffail/gabs/v2"
 	. "github.com/yuin/gopher-lua"
-	"github.com/yuin/gopher-lua/parse"
 	"glu"
 	"glu/json"
 	"io/ioutil"
@@ -20,22 +19,27 @@ var (
 	ResType    *glu.Type
 	ClientType *glu.Type
 	HttpModule *glu.Module
+	ServerPool map[int64]*Server
+	ClientPool map[int64]*Client
 )
 
 func init() {
+	ServerPool = make(map[int64]*Server, 4)
+	ClientPool = make(map[int64]*Client, 4)
 	HttpModule = glu.NewModular("http", `http module built on net/http gorilla/mux, requires json module.
 http.Ctx       ctx type is an wrap on http.Request and http.ResponseWriter, should never call new!
 http.Res       res type is an wrap on http.Response , should never call new!
 http.Client    client type is an wrap of http.Client.
 http.Server server type is wrap with mux.Router and http.Server.
-IMPORTANT: Server handler should be an independent lua function in string form, minimal sample as below:
+IMPORTANT: Server handler should be an independent lua function in Chunk form, minimal sample as below:
 local http=require('http')
 local json=require('json')
 local server=http.Server.new(':8081')
-server:get('/',[[
+local ch,_=chunk([[
 local c=...
-c:sendJson(c:query('p'))
-]])
+c:sendString(c:query('p'))
+]],'handler')
+server:get('/',ch)
 server:start(false)
 while (true) do	end
 `, true)
@@ -48,7 +52,7 @@ while (true) do	end
 		s.ArgError(1, "http.Ctx expected")
 		return nil
 	}
-	CtxType = glu.NewType("Ctx", false, ``,
+	CtxType = glu.NewType("Ctx", ``, false,
 		func(s *LState) interface{} {
 			s.RaiseError("not allow to create ctx instance")
 			return nil
@@ -56,15 +60,13 @@ while (true) do	end
 		AddMethod("vars", `Ctx:vars(name string)string ==> fetch path variable`,
 			func(s *LState) int {
 				v := chkCtx(s)
-				s.CheckType(2, LTString)
-				s.Push(LString(v.Vars(s.ToString(2))))
+				s.Push(LString(v.Vars(s.CheckString(2))))
 				return 1
 			}).
 		AddMethod("header", `Ctx:header(name string)string ==> fetch request header`,
 			func(s *LState) int {
 				v := chkCtx(s)
-				s.CheckType(2, LTString)
-				s.Push(LString(v.Header(s.ToString(2))))
+				s.Push(LString(v.Header(s.CheckString(2))))
 				return 1
 			}).
 		AddMethod("query", `Ctx:query(name string)string ==> fetch request query parameter`,
@@ -141,13 +143,15 @@ while (true) do	end
 		s.ArgError(1, "http.Server expected")
 		return nil
 	}
-	ServerType = glu.NewType("Server", false, `Server.new(addr string)`,
+	ServerType = glu.NewType("Server", `Server.new(addr string)`, false,
 		func(s *LState) interface{} {
 			s.CheckType(1, LTString)
-			return NewServer(s.ToString(1), func(s string) {
+			srv := NewServer(s.ToString(1), func(s string) {
 				//TODO
 				log.Println(s)
 			})
+			ServerPool[srv.ID] = srv
+			return srv
 		}).
 		AddMethod("stop", `Server:stop(seconds int) ==> stop server graceful`,
 			func(s *LState) int {
@@ -214,10 +218,8 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				code := s.CheckString(3)
-				chunk, err := compile(code, route)
-				if err != nil {
-					s.RaiseError("compile handler fail %s", err)
+				chunk := glu.GluModule.CheckChunk(s, 3)
+				if chunk == nil {
 					return 0
 				}
 				v.Route(route, func(ctx *Ctx) {
@@ -225,14 +227,12 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("get", `Server:get(path string, handler string) ==> register handler limit with GET.`,
+		AddMethod("get", `Server:get(path string, handler Chunk) ==> register handler limit with GET.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				code := s.CheckString(3)
-				chunk, err := compile(code, route)
-				if err != nil {
-					s.RaiseError("compile handler fail %s", err)
+				chunk := glu.GluModule.CheckChunk(s, 3)
+				if chunk == nil {
 					return 0
 				}
 				v.Get(route, func(ctx *Ctx) {
@@ -240,14 +240,12 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("post", `Server:post(path string, handler string) ==> register handler limit with POST.`,
+		AddMethod("post", `Server:post(path string, handler Chunk) ==> register handler limit with POST.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				code := s.CheckString(3)
-				chunk, err := compile(code, route)
-				if err != nil {
-					s.RaiseError("compile handler fail %s", err)
+				chunk := glu.GluModule.CheckChunk(s, 3)
+				if chunk == nil {
 					return 0
 				}
 				v.Post(route, func(ctx *Ctx) {
@@ -255,14 +253,12 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("put", `Server:put(path string, handler string) ==> register handler limit with POST.`,
+		AddMethod("put", `Server:put(path string, handler Chunk) ==> register handler limit with POST.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				code := s.CheckString(3)
-				chunk, err := compile(code, route)
-				if err != nil {
-					s.RaiseError("compile handler fail %s", err)
+				chunk := glu.GluModule.CheckChunk(s, 3)
+				if chunk == nil {
 					return 0
 				}
 				v.Put(route, func(ctx *Ctx) {
@@ -270,14 +266,12 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("head", `Server:head(path string,handler string) ==> register handler limit with HEAD.`,
+		AddMethod("head", `Server:head(path string,handler Chunk) ==> register handler limit with HEAD.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				code := s.CheckString(3)
-				chunk, err := compile(code, route)
-				if err != nil {
-					s.RaiseError("compile handler fail %s", err)
+				chunk := glu.GluModule.CheckChunk(s, 3)
+				if chunk == nil {
 					return 0
 				}
 				v.Head(route, func(ctx *Ctx) {
@@ -285,14 +279,12 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("patch", `Server:patch(path string,handler string) ==> register handler limit with PATCH.`,
+		AddMethod("patch", `Server:patch(path string,handler Chunk) ==> register handler limit with PATCH.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				code := s.CheckString(3)
-				chunk, err := compile(code, route)
-				if err != nil {
-					s.RaiseError("compile handler fail %s", err)
+				chunk := glu.GluModule.CheckChunk(s, 3)
+				if chunk == nil {
 					return 0
 				}
 				v.Patch(route, func(ctx *Ctx) {
@@ -300,14 +292,12 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("delete", `Server:delete(path string,handler string) ==> register handler limit with DELETE.`,
+		AddMethod("delete", `Server:delete(path string,handler Chunk) ==> register handler limit with DELETE.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				code := s.CheckString(3)
-				chunk, err := compile(code, route)
-				if err != nil {
-					s.RaiseError("compile handler fail %s", err)
+				chunk := glu.GluModule.CheckChunk(s, 3)
+				if chunk == nil {
 					return 0
 				}
 				v.Delete(route, func(ctx *Ctx) {
@@ -315,14 +305,12 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("connect", `Server:connect(path string,handler string) ==> register handler limit with CONNECT.`,
+		AddMethod("connect", `Server:connect(path string,handler Chunk) ==> register handler limit with CONNECT.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				code := s.CheckString(3)
-				chunk, err := compile(code, route)
-				if err != nil {
-					s.RaiseError("compile handler fail %s", err)
+				chunk := glu.GluModule.CheckChunk(s, 3)
+				if chunk == nil {
 					return 0
 				}
 				v.Connect(route, func(ctx *Ctx) {
@@ -330,14 +318,12 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("options", `Server:options(path string,handler string) ==> register handler limit with OPTIONS.should not use if with cors enable`,
+		AddMethod("options", `Server:options(path string,handler Chunk) ==> register handler limit with OPTIONS.should not use if with cors enable`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				code := s.CheckString(3)
-				chunk, err := compile(code, route)
-				if err != nil {
-					s.RaiseError("compile handler fail %s", err)
+				chunk := glu.GluModule.CheckChunk(s, 3)
+				if chunk == nil {
 					return 0
 				}
 				v.Options(route, func(ctx *Ctx) {
@@ -345,14 +331,12 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("trace", `Server:trace(path string,handler string) ==> register handler limit with TRACE.`,
+		AddMethod("trace", `Server:trace(path string,handler Chunk) ==> register handler limit with TRACE.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				code := s.CheckString(3)
-				chunk, err := compile(code, route)
-				if err != nil {
-					s.RaiseError("compile handler fail %s", err)
+				chunk := glu.GluModule.CheckChunk(s, 3)
+				if chunk == nil {
 					return 0
 				}
 				v.Trace(route, func(ctx *Ctx) {
@@ -368,8 +352,45 @@ code string) ==> register handler without method limit.`,
 				file := s.CheckString(4)
 				v.File(route, pfx, file)
 				return 0
+			}).
+		AddMethod("release", `Server:release() ==> release this server`,
+			func(s *LState) int {
+				v := chkServer(s)
+				if v.Running() {
+					_, _ = v.Stop(time.Second)
+				}
+				delete(ServerPool, v.ID)
+				return 0
+			}).
+		AddFunc("pool", `Server.pool()int ==> current pooled server size`,
+			func(s *LState) int {
+				s.Push(LNumber(len(ServerPool)))
+				return 1
+			}).
+		AddFunc("poolKeys", `Server.poolKeys()[]int64 ==> current pool server keys`,
+			func(s *LState) int {
+				t := s.NewTable()
+				n := 1
+				for i := range ServerPool {
+					t.RawSetInt(n, LNumber(i))
+					n++
+				}
+				s.Push(t)
+				return 1
+			}).
+		AddFunc("pooled", `Server.pooled(key int64)Server? ==> fetch from pool`,
+			func(s *LState) int {
+				k := s.CheckInt64(1)
+				if v, ok := ServerPool[k]; ok {
+					s.Push(ServerType.NewValue(s, v))
+				} else {
+					s.Push(LNil)
+				}
+				return 1
 			})
 	//endregion
+
+	//region Res
 	chkRes := func(s *LState) *http.Response {
 		ud := s.CheckUserData(1)
 		if v, ok := ud.Value.(*http.Response); ok {
@@ -378,7 +399,7 @@ code string) ==> register handler without method limit.`,
 		s.ArgError(1, "http.Res expected")
 		return nil
 	}
-	ResType = glu.NewType("Res", false, ``,
+	ResType = glu.NewType("Res", ``, false,
 		func(s *LState) interface{} {
 			s.RaiseError("not allow to create ctx instance")
 			return nil
@@ -395,7 +416,7 @@ code string) ==> register handler without method limit.`,
 				s.Push(LString(c.Status))
 				return 1
 			}).
-		AddMethod("contentLen", `Res:contentLen()int`,
+		AddMethod("size", `Res:size()int ==> content size in bytes`,
 			func(s *LState) int {
 				c := chkRes(s)
 				s.Push(LNumber(c.ContentLength))
@@ -443,6 +464,7 @@ code string) ==> register handler without method limit.`,
 				s.Push(LNil)
 				return 2
 			})
+	//endregion
 
 	//region Client
 	chkClient := func(s *LState) *Client {
@@ -453,9 +475,11 @@ code string) ==> register handler without method limit.`,
 		s.ArgError(1, "http.Client expected")
 		return nil
 	}
-	ClientType = glu.NewType("Client", false, `client.new(timeoutSeconds int)`,
+	ClientType = glu.NewType("Client", `client.new(timeoutSeconds int)`, false,
 		func(s *LState) interface{} {
-			return NewClient(time.Duration(s.CheckInt(1)) * time.Second)
+			c := NewClient(time.Duration(s.CheckInt(1)) * time.Second)
+			ClientPool[c.ID] = c
+			return c
 		}).
 		AddMethod("get", `Client:get(url string)(Res?,error?) ==>perform GET request`,
 			func(s *LState) int {
@@ -547,6 +571,38 @@ code string) ==> register handler without method limit.`,
 					s.Push(LNil)
 				}
 				return 2
+			}).
+		AddMethod("release", `Client:release() ==>release this client`,
+			func(s *LState) int {
+				c := chkClient(s)
+				delete(ClientPool, c.ID)
+				return 0
+			}).
+		AddFunc("pool", `Client.pool()int ==> current in pool Client size`,
+			func(s *LState) int {
+				s.Push(LNumber(len(ClientPool)))
+				return 1
+			}).
+		AddFunc("poolKeys", `Client.poolKeys()[]int64 ==> current pool Client keys`,
+			func(s *LState) int {
+				t := s.NewTable()
+				n := 1
+				for i := range ClientPool {
+					t.RawSetInt(n, LNumber(i))
+					n++
+				}
+				s.Push(t)
+				return 1
+			}).
+		AddFunc("pooled", `Client.pooled(key int64)Server? ==> fetch from pool`,
+			func(s *LState) int {
+				k := s.CheckInt64(1)
+				if v, ok := ClientPool[k]; ok {
+					s.Push(ClientType.NewValue(s, v))
+				} else {
+					s.Push(LNil)
+				}
+				return 1
 			})
 	//endregion
 	HttpModule.AddModule(CtxType)
@@ -556,26 +612,14 @@ code string) ==> register handler without method limit.`,
 	glu.Registry = append(glu.Registry, HttpModule)
 }
 func executeHandler(chunk *FunctionProto, c *Ctx) {
-	x := glu.Get()
-	defer glu.Put(x)
-	fn := x.NewFunctionFromProto(chunk)
-	x.Push(fn)
-	_ = CtxType.New(x, c)
-	err := x.PCall(1, 0, nil)
-	if err != nil {
+	if err := glu.ExecuteChunk(chunk, 1, 0, glu.OpSafe(func(s *LState) {
+		CtxType.New(s, c)
+	}), nil); err != nil {
 		c.SetStatus(500)
 		c.SendString(err.Error())
-		fmt.Printf("error handle %+v : %s", c.URL, err)
+		fmt.Printf("handle error %+v : %s", c.URL, err)
 		return
 	}
-}
-func compile(code string, path string) (*FunctionProto, error) {
-	name := fmt.Sprintf("handler(%s)", path)
-	chunk, err := parse.Parse(strings.NewReader(code), name)
-	if err != nil {
-		return nil, err
-	}
-	return Compile(chunk, name)
 }
 func tableToSlice(s *LState, n int) (r []string) {
 	v := s.Get(n)

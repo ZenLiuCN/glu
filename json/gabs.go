@@ -26,7 +26,7 @@ func init() {
 	m := glu.NewModular("json", `module json is wrap of jeffail/gabs as dynamic json tool.
 json.Json  ==> type, json container.
 `, true)
-	t := glu.NewType("Json", false, `Json.new(json string?)Json? ==> create Json instance.`,
+	t := glu.NewType("Json", `Json.new(json string?)Json? ==> create Json instance.`, false,
 		func(s *LState) interface{} {
 			if s.GetTop() == 1 {
 				s.CheckType(1, LTString)

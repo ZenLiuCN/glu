@@ -77,7 +77,7 @@ func helpFn(help map[string]string) LGFunction {
 		return 1
 	}
 }
-func NewType(name string, top bool, help string, ctor func(*LState) interface{}) *Type {
+func NewType(name string, help string, top bool, ctor func(*LState) interface{}) *Type {
 	return &Type{Name: name, Top: top, Help: help, constructor: ctor}
 }
 func NewModular(name string, help string, top bool) *Module {

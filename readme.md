@@ -31,19 +31,21 @@
    ```lua
    local http=require('http')
    local server=http.Server.new(':8081') --new Server with listen address
-   server:get('/',[[ -- the handler is string lua script
-               local c=... --only parameter is http.Ctx
-               c:sendJson(c:query('p')) --query should legal JSON string
-           ]])
+   server:get('/',chunk([[                -- the handler is string lua script
+               local c=...                --only parameter is http.Ctx
+               c:sendString(c:query('p')) --query should legal JSON string
+           ]]))
    server:start(false)
    while (true) do	end
    ```
 3. http client
    ```lua
     local res,err=require('http').Client.new(5):get('http://github.com')
-    local txt=res:body()
     print(err)
+    if res:size()>0 then
+    local txt=res:body()  
     print(txt)
+    end 
    ```
 
 ## Support this project

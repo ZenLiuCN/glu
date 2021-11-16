@@ -9,12 +9,12 @@ var (
 	//Option LState configuration
 	Option   Options = Options{}
 	PoolSize         = 4
-	pool     *statePool
+	pool     *StatePool
 )
 
 //MakePool manual create statePool , when need to change Option, should invoke once before use Get and Put
 func MakePool() {
-	pool = create()
+	pool = CreatePool()
 }
 
 //Get LState from statePool
@@ -22,7 +22,7 @@ func Get() *LState {
 	if pool == nil {
 		MakePool()
 	}
-	return pool.get()
+	return pool.Get()
 }
 
 //Put LState back to statePool
@@ -30,7 +30,7 @@ func Put(s *LState) {
 	if pool == nil {
 		MakePool()
 	}
-	pool.put(s)
+	pool.Put(s)
 }
 
 var (
@@ -39,16 +39,25 @@ var (
 )
 
 //region Pool
-type statePool struct {
+
+//StatePool threadsafe LState Pool
+type StatePool struct {
 	m     sync.Mutex
 	saved []*LState
+	ctor  func() *LState
 }
 
-func create() *statePool {
-	return &statePool{saved: make([]*LState, 0, PoolSize)}
+//CreatePoolWith create pool with user defined constructor
+//
+//**Note** GluModule will auto registered
+func CreatePoolWith(ctor func() *LState) *StatePool {
+	return &StatePool{saved: make([]*LState, 0, PoolSize), ctor: ctor}
+}
+func CreatePool() *StatePool {
+	return &StatePool{saved: make([]*LState, 0, PoolSize)}
 }
 
-func (pl *statePool) get() *LState {
+func (pl *StatePool) Get() *LState {
 	pl.m.Lock()
 	defer pl.m.Unlock()
 	n := len(pl.saved)
@@ -60,19 +69,29 @@ func (pl *statePool) get() *LState {
 	return x
 }
 
-func (pl *statePool) new() *LState {
+func (pl *StatePool) new() *LState {
+	if pl.ctor != nil {
+		l := pl.ctor()
+		GluModule.PreLoad(l)
+		return l
+	}
 	L := NewState(Option)
 	configurer(L)
 	return L
 }
 
-func (pl *statePool) put(L *LState) {
+func (pl *StatePool) Put(L *LState) {
+	if L.IsClosed() {
+		return
+	}
+	// reset stack
+	L.Pop(L.GetTop())
 	pl.m.Lock()
 	defer pl.m.Unlock()
 	pl.saved = append(pl.saved, L)
 }
 
-func (pl *statePool) Shutdown() {
+func (pl *StatePool) Shutdown() {
 	for _, L := range pl.saved {
 		L.Close()
 	}
@@ -80,10 +99,10 @@ func (pl *statePool) Shutdown() {
 
 //endregion
 func configurer(l *LState) {
+	GluModule.PreLoad(l)
 	if Auto {
 		for _, module := range Registry {
 			module.PreLoad(l)
 		}
 	}
-
 }
