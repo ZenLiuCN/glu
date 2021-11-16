@@ -40,19 +40,37 @@ var (
 
 //region Pool
 
-//StoredState with Env snapshot to stop Global pollution
+//StoredState take Env snapshot to protect from Global pollution
 type StoredState struct {
 	*LState
-	env *LTable
+	env  *LTable
+	snap []LValue
 }
 
+//Polluted check if the Env is polluted
+func (s *StoredState) Polluted() (r bool) {
+	s.LState.Env.ForEach(func(k LValue, v LValue) {
+		for _, value := range s.snap {
+			if k == value {
+				return
+			}
+		}
+		r = true
+	})
+	return
+}
+
+//snapshot take snapshot for Env
 func (s *StoredState) snapshot() *StoredState {
 	s.env = s.NewTable()
 	s.LState.Env.ForEach(func(k LValue, v LValue) {
 		s.env.RawSet(k, v)
+		s.snap = append(s.snap, k)
 	})
 	return s
 }
+
+//restore reset Env
 func (s *StoredState) restore() (r *StoredState) {
 	//safeguard
 	defer func() {
@@ -62,10 +80,12 @@ func (s *StoredState) restore() (r *StoredState) {
 		}
 	}()
 	s.LState.Pop(s.LState.GetTop())
-	s.LState.Env = s.NewTable()
-	s.env.ForEach(func(k LValue, v LValue) {
-		s.LState.Env.RawSet(k, v)
-	})
+	if s.Polluted() {
+		s.LState.Env = s.NewTable()
+		s.env.ForEach(func(k LValue, v LValue) {
+			s.LState.Env.RawSet(k, v)
+		})
+	}
 	return s
 }
 

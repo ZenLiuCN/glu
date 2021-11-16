@@ -300,6 +300,9 @@ func (m Type) New(l *LState, val interface{}) int {
 	l.Push(ud)
 	return 1
 }
+func (m Type) NewStoreState(l *StoredState, val interface{}) int {
+	return m.New(l.LState, val)
+}
 
 //NewValue create new LValue
 func (m Type) NewValue(l *LState, val interface{}) *LUserData {
@@ -307,6 +310,9 @@ func (m Type) NewValue(l *LState, val interface{}) *LUserData {
 	ud.Value = val
 	l.SetMetatable(ud, m.getOrBuildMeta(l))
 	return ud
+}
+func (m Type) NewValueStoreState(l *StoredState, val interface{}) *LUserData {
+	return m.NewValue(l.LState, val)
 }
 
 //new internal creator

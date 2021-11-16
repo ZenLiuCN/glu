@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/Jeffail/gabs/v2"
 	. "github.com/yuin/gopher-lua"
-	"glu"
+	. "glu"
 	"glu/json"
 	"io/ioutil"
 	"log"
@@ -14,11 +14,11 @@ import (
 )
 
 var (
-	CtxType    *glu.Type
-	ServerType *glu.Type
-	ResType    *glu.Type
-	ClientType *glu.Type
-	HttpModule *glu.Module
+	CtxType    *Type
+	ServerType *Type
+	ResType    *Type
+	ClientType *Type
+	HttpModule *Module
 	ServerPool map[int64]*Server
 	ClientPool map[int64]*Client
 )
@@ -26,7 +26,7 @@ var (
 func init() {
 	ServerPool = make(map[int64]*Server, 4)
 	ClientPool = make(map[int64]*Client, 4)
-	HttpModule = glu.NewModular("http", `http module built on net/http gorilla/mux, requires json module.
+	HttpModule = NewModular("http", `http module built on net/http gorilla/mux, requires json module.
 http.Ctx       ctx type is an wrap on http.Request and http.ResponseWriter, should never call new!
 http.Res       res type is an wrap on http.Response , should never call new!
 http.Client    client type is an wrap of http.Client. remember to call Client:release when not needed.
@@ -52,7 +52,7 @@ while (true) do	end
 		s.ArgError(1, "http.Ctx expected")
 		return nil
 	}
-	CtxType = glu.NewType("Ctx", ``, false,
+	CtxType = NewType("Ctx", ``, false,
 		func(s *LState) interface{} {
 			s.RaiseError("not allow to create ctx instance")
 			return nil
@@ -143,7 +143,7 @@ while (true) do	end
 		s.ArgError(1, "http.Server expected")
 		return nil
 	}
-	ServerType = glu.NewType("Server", `Server.new(addr string)`, false,
+	ServerType = NewType("Server", `Server.new(addr string)`, false,
 		func(s *LState) interface{} {
 			s.CheckType(1, LTString)
 			srv := NewServer(s.ToString(1), func(s string) {
@@ -218,7 +218,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := glu.GluModule.CheckChunk(s, 3)
+				chunk := GluModule.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -231,7 +231,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := glu.GluModule.CheckChunk(s, 3)
+				chunk := GluModule.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -244,7 +244,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := glu.GluModule.CheckChunk(s, 3)
+				chunk := GluModule.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -257,7 +257,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := glu.GluModule.CheckChunk(s, 3)
+				chunk := GluModule.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -270,7 +270,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := glu.GluModule.CheckChunk(s, 3)
+				chunk := GluModule.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -283,7 +283,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := glu.GluModule.CheckChunk(s, 3)
+				chunk := GluModule.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -296,7 +296,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := glu.GluModule.CheckChunk(s, 3)
+				chunk := GluModule.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -309,7 +309,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := glu.GluModule.CheckChunk(s, 3)
+				chunk := GluModule.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -322,7 +322,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := glu.GluModule.CheckChunk(s, 3)
+				chunk := GluModule.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -335,7 +335,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := glu.GluModule.CheckChunk(s, 3)
+				chunk := GluModule.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -399,7 +399,7 @@ code string) ==> register handler without method limit.`,
 		s.ArgError(1, "http.Res expected")
 		return nil
 	}
-	ResType = glu.NewType("Res", ``, false,
+	ResType = NewType("Res", ``, false,
 		func(s *LState) interface{} {
 			s.RaiseError("not allow to create ctx instance")
 			return nil
@@ -475,7 +475,7 @@ code string) ==> register handler without method limit.`,
 		s.ArgError(1, "http.Client expected")
 		return nil
 	}
-	ClientType = glu.NewType("Client", `client.new(timeoutSeconds int)`, false,
+	ClientType = NewType("Client", `client.new(timeoutSeconds int)`, false,
 		func(s *LState) interface{} {
 			c := NewClient(time.Duration(s.CheckInt(1)) * time.Second)
 			ClientPool[c.ID] = c
@@ -609,11 +609,11 @@ code string) ==> register handler without method limit.`,
 	HttpModule.AddModule(ServerType)
 	HttpModule.AddModule(ClientType)
 	HttpModule.AddModule(ResType)
-	glu.Registry = append(glu.Registry, HttpModule)
+	Registry = append(Registry, HttpModule)
 }
 func executeHandler(chunk *FunctionProto, c *Ctx) {
-	if err := glu.ExecuteChunk(chunk, 1, 0, func(s *LState) error {
-		CtxType.New(s, c)
+	if err := ExecuteChunk(chunk, 1, 0, func(s *StoredState) error {
+		CtxType.New(s.LState, c)
 		return nil
 	}, nil); err != nil {
 		c.SetStatus(500)

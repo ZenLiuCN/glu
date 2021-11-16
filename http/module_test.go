@@ -30,8 +30,9 @@ func TestModuleHelp(t *testing.T) {
 	}
 }
 func TestModuleToSlice(t *testing.T) {
-	s := glu.Get()
-	defer glu.Put(s)
+	x := glu.Get()
+	defer glu.Put(x)
+	s := x.LState
 	tab := s.NewTable()
 	tab.RawSetInt(1, lua.LString("1"))
 	tab.RawSetInt(2, lua.LString("2"))
@@ -64,8 +65,9 @@ func TestModuleToSlice(t *testing.T) {
 	}
 }
 func TestModuleToMultiMap(t *testing.T) {
-	s := glu.Get()
-	defer glu.Put(s)
+	x := glu.Get()
+	defer glu.Put(x)
+	s := x.LState
 	tab := s.NewTable()
 	t1 := s.NewTable()
 	t1.RawSetInt(1, lua.LNumber(3))
@@ -81,8 +83,9 @@ func TestModuleToMultiMap(t *testing.T) {
 	}
 }
 func TestModuleToMap(t *testing.T) {
-	s := glu.Get()
-	defer glu.Put(s)
+	x := glu.Get()
+	defer glu.Put(x)
+	s := x.LState
 	tab := s.NewTable()
 	tab.RawSetString("1", lua.LString("1"))
 	tab.RawSetString("2", lua.LString("2"))
@@ -164,9 +167,8 @@ a:sendString("1")
 	}
 }
 func TestModuleRes(t *testing.T) {
-	s := glu.Get()
-	defer glu.Put(s)
-
+	x := glu.Get()
+	defer glu.Put(x)
 	r := &http.Response{
 		Status:           "200 OK",
 		StatusCode:       200,
@@ -192,8 +194,8 @@ assert(a:status()=='200 OK')
 assert(a:size()==100)
 assert(a:header()['V']=="1")
 assert(a:bodyJson():json()=='{"a":1}')
-`, 1, 0, func(s *lua.LState) error {
-		s.Push(ResType.NewValue(s, r))
+`, 1, 0, func(s *glu.StoredState) error {
+		s.Push(ResType.NewValue(s.LState, r))
 		return nil
 	}, nil)
 	if err != nil {
@@ -218,8 +220,8 @@ assert(a:bodyJson():json()=='{"a":1}')
 	err = glu.ExecuteCode(`
 local a=... 
 assert(a:body()=='{"a":1}')
-`, 1, 0, func(s *lua.LState) error {
-		s.Push(ResType.NewValue(s, r))
+`, 1, 0, func(s *glu.StoredState) error {
+		s.Push(ResType.NewValueStoreState(s, r))
 		return nil
 	}, nil)
 	if err != nil {
