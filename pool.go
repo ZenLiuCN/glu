@@ -56,6 +56,7 @@ func (s *StoredState) Polluted() (r bool) {
 			}
 		}
 		r = true
+		return
 	})
 	return
 }
