@@ -18,9 +18,9 @@ func TestGluModule(t *testing.T) {
 		]],'testChunk')
 		if err~=nil then error(err,1) end
 		return ch
-	`, 0, 1, nil, func(s *LState) error {
-		c := GluModule.CheckChunk(s, 1)
-		return ExecuteChunk(c, 1, 1, OpPush(LString("1")), func(s *LState) error {
+	`, 0, 1, nil, func(s *StoredState) error {
+		c := GluModule.CheckChunk(s.LState, 1)
+		return ExecuteChunk(c, 1, 1, OpPush(LString("1")), func(s *StoredState) error {
 			if s.CheckString(1) != "1" {
 				return fmt.Errorf("error: %s", s.CheckString(1))
 			}

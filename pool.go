@@ -18,7 +18,7 @@ func MakePool() {
 }
 
 //Get LState from statePool
-func Get() *LState {
+func Get() *StoredState {
 	if pool == nil {
 		MakePool()
 	}
@@ -26,7 +26,7 @@ func Get() *LState {
 }
 
 //Put LState back to statePool
-func Put(s *LState) {
+func Put(s *StoredState) {
 	if pool == nil {
 		MakePool()
 	}
@@ -40,10 +40,39 @@ var (
 
 //region Pool
 
+//StoredState with Env snapshot to stop Global pollution
+type StoredState struct {
+	*LState
+	env *LTable
+}
+
+func (s *StoredState) snapshot() *StoredState {
+	s.env = s.NewTable()
+	s.LState.Env.ForEach(func(k LValue, v LValue) {
+		s.env.RawSet(k, v)
+	})
+	return s
+}
+func (s *StoredState) restore() (r *StoredState) {
+	//safeguard
+	defer func() {
+		rc := recover()
+		if rc != nil {
+			r = nil
+		}
+	}()
+	s.LState.Pop(s.LState.GetTop())
+	s.LState.Env = s.NewTable()
+	s.env.ForEach(func(k LValue, v LValue) {
+		s.LState.Env.RawSet(k, v)
+	})
+	return s
+}
+
 //StatePool threadsafe LState Pool
 type StatePool struct {
 	m     sync.Mutex
-	saved []*LState //TODO replace with more effective structure
+	saved []*StoredState //TODO replace with more effective structure
 	ctor  func() *LState
 }
 
@@ -51,13 +80,13 @@ type StatePool struct {
 //
 //**Note** GluModule will auto registered
 func CreatePoolWith(ctor func() *LState) *StatePool {
-	return &StatePool{saved: make([]*LState, 0, PoolSize), ctor: ctor}
+	return &StatePool{saved: make([]*StoredState, 0, PoolSize), ctor: ctor}
 }
 func CreatePool() *StatePool {
-	return &StatePool{saved: make([]*LState, 0, PoolSize)}
+	return &StatePool{saved: make([]*StoredState, 0, PoolSize)}
 }
 
-func (pl *StatePool) Get() *LState {
+func (pl *StatePool) Get() *StoredState {
 	pl.m.Lock()
 	defer pl.m.Unlock()
 	n := len(pl.saved)
@@ -69,26 +98,29 @@ func (pl *StatePool) Get() *LState {
 	return x
 }
 
-func (pl *StatePool) new() *LState {
+func (pl *StatePool) new() *StoredState {
 	if pl.ctor != nil {
 		l := pl.ctor()
 		GluModule.PreLoad(l)
-		return l
+		return (&StoredState{LState: l}).snapshot()
 	}
 	L := NewState(Option)
 	configurer(L)
-	return L
+	return (&StoredState{LState: L}).snapshot()
 }
 
-func (pl *StatePool) Put(L *LState) {
+func (pl *StatePool) Put(L *StoredState) {
 	if L.IsClosed() {
 		return
 	}
 	// reset stack
-	L.Pop(L.GetTop())
+	l := L.restore()
+	if l == nil {
+		return
+	}
 	pl.m.Lock()
 	defer pl.m.Unlock()
-	pl.saved = append(pl.saved, L)
+	pl.saved = append(pl.saved, l)
 }
 
 func (pl *StatePool) Shutdown() {

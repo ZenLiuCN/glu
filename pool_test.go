@@ -1,13 +1,13 @@
 package glu
 
 import (
-	lua "github.com/yuin/gopher-lua"
+	. "github.com/yuin/gopher-lua"
 	"testing"
 )
 
 var (
-	chunk1 *lua.FunctionProto
-	chunk2 *lua.FunctionProto
+	chunk1 *FunctionProto
+	chunk2 *FunctionProto
 )
 
 func init() {
@@ -52,5 +52,45 @@ func BenchmarkPoolWithClose(b *testing.B) {
 			continue
 		}
 		Put(x)
+	}
+}
+
+func TestStateTrace(t *testing.T) {
+	l := Get()
+	snap := func() (r []string) {
+		println(l.Env.MaxN(), l.Env.Len())
+		l.Env.ForEach(func(k LValue, v LValue) {
+			r = append(r, k.String())
+		})
+		return r
+	}
+	r0 := snap()
+	err := l.DoString(`
+		a=1 print(tostring(a).."1+")
+	`)
+	if err != nil {
+		return
+	}
+	r1 := snap()
+	Put(l)
+	r2 := snap()
+l0:
+	for _, s := range r1 {
+		for _, s2 := range r0 {
+			if s2 == s {
+				continue l0
+			}
+		}
+		println("pollution: ", s)
+	}
+
+l2:
+	for _, s := range r2 {
+		for _, s2 := range r0 {
+			if s2 == s {
+				continue l2
+			}
+		}
+		println("pollution: ", s)
 	}
 }

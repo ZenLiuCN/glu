@@ -17,14 +17,14 @@ func CompileChunk(code string, source string) (*FunctionProto, error) {
 	return Compile(chunk, name)
 }
 
-type Operator = func(s *LState) error
+type Operator = func(s *StoredState) error
 
 var (
 	//OpNone operator do nothing, better to use nil
-	OpNone = func(s *LState) error { return nil }
+	OpNone = func(s *StoredState) error { return nil }
 	//OpPush operator to push N value
 	OpPush = func(n ...LValue) Operator {
-		return func(s *LState) error {
+		return func(s *StoredState) error {
 			for _, value := range n {
 				s.Push(value)
 			}
@@ -33,7 +33,7 @@ var (
 	}
 	//OpPushUserData operator to push N UserDate
 	OpPushUserData = func(n ...interface{}) Operator {
-		return func(s *LState) error {
+		return func(s *StoredState) error {
 			for _, i := range n {
 				ud := s.NewUserData()
 				ud.Value = i
@@ -43,8 +43,8 @@ var (
 		}
 	}
 	//OpSafe operator to wrap as none error will happen
-	OpSafe = func(fn func(s *LState)) Operator {
-		return func(s *LState) error {
+	OpSafe = func(fn func(s *StoredState)) Operator {
+		return func(s *StoredState) error {
 			fn(s)
 			return nil
 		}
@@ -55,7 +55,7 @@ var (
 			panic("start must greater than 0 and count must greater than 0")
 		}
 		t := start + count
-		return func(s *LState) error {
+		return func(s *StoredState) error {
 			v := make([]LValue, 0, count)
 			for i := start; i < t; i++ {
 				v = append(v, s.Get(i))
@@ -70,7 +70,7 @@ var (
 		if count < 1 {
 			panic("count must greater than 0")
 		}
-		return func(s *LState) error {
+		return func(s *StoredState) error {
 			s.Pop(count)
 			return nil
 		}
