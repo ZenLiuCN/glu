@@ -1,4 +1,4 @@
-module glu
+module github/ZenLiuCn/glu
 
 go 1.9
 
