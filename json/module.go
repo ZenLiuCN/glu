@@ -2,8 +2,8 @@ package json
 
 import (
 	. "github.com/Jeffail/gabs/v2"
+	"github.com/ZenLiuCN/glu"
 	. "github.com/yuin/gopher-lua"
-	"glu"
 )
 
 var (

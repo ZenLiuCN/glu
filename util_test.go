@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	. "github.com/yuin/gopher-lua"
+	"github.com/yuin/gopher-lua/parse"
+	"strings"
 	"testing"
 )
 
@@ -175,5 +177,49 @@ func TestOperator(t *testing.T) {
 	}, 1, 3)(s)
 	if err != nil {
 		return
+	}
+}
+
+func TestParse(t *testing.T) {
+	stmts, err := parse.Parse(strings.NewReader(`
+c:showA() -- A show Hello
+c:showB() -- B show Hello
+	`), `test`)
+	if err != nil {
+		panic(err)
+	}
+	println(parse.Dump(stmts))
+}
+
+const com = `
+	local Oop = require("Oop")
+-- 从lua创建对象
+local A = Oop.class("A")
+-- 构造函数
+function A:ctor(arg)
+self.arg = arg
+print("create A")
+end
+-- new的参数将传递到ctor中
+local a = A:new("hello") -- create A
+print("a.arg", a.arg) -- a.arg  hello
+-- 从lua创建的类继承
+local B = Oop.class("B", A)
+function B:ctor(arg, brg)
+-- 调用父类的构造函数
+B.super.A.ctor(self, arg)
+self.brg = brg
+print("create B")
+end
+local b = B:new("hello", "world") -- create A \n create B
+print("b.arg", "b.brg", b.arg, b.brg) -- b.arg  b.brg   hello   world
+`
+
+func BenchmarkParse(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, err := parse.Parse(strings.NewReader(com), "test")
+		if err != nil {
+			panic(err)
+		}
 	}
 }

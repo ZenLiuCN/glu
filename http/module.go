@@ -3,9 +3,9 @@ package http
 import (
 	"fmt"
 	"github.com/Jeffail/gabs/v2"
+	. "github.com/ZenLiuCN/glu"
+	"github.com/ZenLiuCN/glu/json"
 	. "github.com/yuin/gopher-lua"
-	. "glu"
-	"glu/json"
 	"io/ioutil"
 	"log"
 	"net/http"
