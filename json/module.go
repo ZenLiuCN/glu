@@ -371,7 +371,7 @@ json.Json  ==> type, json container.
 		})
 	JsonModule.AddModule(JsonType)
 
-	glu.Registry = append(glu.Registry, JsonModule)
+	glu.registry = append(glu.registry, JsonModule)
 
 }
 func parseTable(t *LTable, g *Container) *Container {

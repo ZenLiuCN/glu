@@ -609,7 +609,7 @@ code string) ==> register handler without method limit.`,
 	HttpModule.AddModule(ServerType)
 	HttpModule.AddModule(ClientType)
 	HttpModule.AddModule(ResType)
-	Registry = append(Registry, HttpModule)
+	registry = append(registry, HttpModule)
 }
 func executeHandler(chunk *FunctionProto, c *Ctx) {
 	if err := ExecuteChunk(chunk, 1, 0, func(s *StoredState) error {

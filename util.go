@@ -1,13 +1,14 @@
 package glu
 
 import (
+	"errors"
 	"fmt"
 	. "github.com/yuin/gopher-lua"
 	"github.com/yuin/gopher-lua/parse"
 	"strings"
 )
 
-//CompileChunk compile code to FunctionProto
+// CompileChunk compile code to FunctionProto
 func CompileChunk(code string, source string) (*FunctionProto, error) {
 	name := fmt.Sprintf(source)
 	chunk, err := parse.Parse(strings.NewReader(code), name)
@@ -17,6 +18,7 @@ func CompileChunk(code string, source string) (*FunctionProto, error) {
 	return Compile(chunk, name)
 }
 
+// Operator operate stored state
 type Operator = func(s *StoredState) error
 
 var (
@@ -77,7 +79,7 @@ var (
 	}
 )
 
-//ExecuteChunk execute pre complied FunctionProto
+// ExecuteChunk execute pre complied FunctionProto
 func ExecuteChunk(code *FunctionProto, argN, retN int, before Operator, after Operator) (err error) {
 	s := Get()
 	defer Put(s)
@@ -97,7 +99,7 @@ func ExecuteChunk(code *FunctionProto, argN, retN int, before Operator, after Op
 	return nil
 }
 
-//ExecuteCode run code in LState, use before to push args, after to extract return value
+// ExecuteCode run code in LState, use before to push args, after to extract return value
 func ExecuteCode(code string, argsN, retN int, before Operator, after Operator) error {
 	s := Get()
 	defer Put(s)
@@ -119,4 +121,44 @@ func ExecuteCode(code string, argsN, retN int, before Operator, after Operator) 
 		}
 		return nil
 	}
+}
+
+// PanicErr check if error not nil then panic
+func PanicErr(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
+// Recoverable warp a function with recover
+func Recoverable(act func()) (err error) {
+	defer func() {
+		r := recover()
+		switch r.(type) {
+		case error:
+			err = r.(error)
+		case string:
+			err = errors.New(r.(string))
+		default:
+			err = fmt.Errorf(`%#v`, r)
+		}
+	}()
+	act()
+	return
+}
+
+func Recoverable2(act func() error) (err error) {
+	defer func() {
+		r := recover()
+		switch r.(type) {
+		case error:
+			err = r.(error)
+		case string:
+			err = errors.New(r.(string))
+		default:
+			err = fmt.Errorf(`%#v`, r)
+		}
+	}()
+	err = act()
+	return
 }
