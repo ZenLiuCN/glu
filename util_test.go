@@ -38,8 +38,8 @@ func TestExecuteChunk(t *testing.T) {
 		code   *FunctionProto
 		argN   int
 		retN   int
-		before func(s *StoredState) error
-		after  func(s *StoredState) error
+		before func(s *Vm) error
+		after  func(s *Vm) error
 	}
 	tests := []struct {
 		name    string
@@ -49,15 +49,15 @@ func TestExecuteChunk(t *testing.T) {
 		{"c1", args{c1, 0, 0, nil, nil}, false},
 		{"c2", args{c2, 1, 0, OpPush(LNumber(1.1)), nil}, false},
 		{"c3", args{c3, 1, 0, OpPush(LNumber(1.1)), nil}, true},
-		{"c4", args{c4, 1, 1, OpPush(LNumber(1.2)), func(s *StoredState) error {
+		{"c4", args{c4, 1, 1, OpPush(LNumber(1.2)), func(s *Vm) error {
 			if s.Get(1).(LNumber) != 1.2 {
 				return fmt.Errorf("just error")
 			}
 			return nil
 		}}, false},
-		{"c5", args{c4, 1, 1, func(s *StoredState) error {
+		{"c5", args{c4, 1, 1, func(s *Vm) error {
 			return fmt.Errorf("just error")
-		}, func(s *StoredState) error {
+		}, func(s *Vm) error {
 			if s.CheckNumber(1) != 1.2 {
 				return fmt.Errorf("just error")
 			}
@@ -78,49 +78,49 @@ func TestExecuteCode(t *testing.T) {
 		code   string
 		argsN  int
 		retN   int
-		before func(s *StoredState) error
-		after  func(s *StoredState) error
+		before func(s *Vm) error
+		after  func(s *Vm) error
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantErr bool
 	}{
-		{"simple", args{`local a=... print(a)`, 1, 0, func(s *StoredState) error {
+		{"simple", args{`local a=... print(a)`, 1, 0, func(s *Vm) error {
 			s.Push(LString("1"))
 			return nil
 		}, nil}, false},
-		{"simple error", args{`local a=... assert(a==nil)`, 1, 0, func(s *StoredState) error {
+		{"simple error", args{`local a=... assert(a==nil)`, 1, 0, func(s *Vm) error {
 			s.Push(LString("1"))
 			return nil
 		}, nil}, true},
-		{"with return ", args{`local a=... return a`, 1, 1, func(s *StoredState) error {
+		{"with return ", args{`local a=... return a`, 1, 1, func(s *Vm) error {
 			s.Push(LString("1"))
 			return nil
-		}, func(s *StoredState) error {
+		}, func(s *Vm) error {
 			if s.CheckString(1) != "1" {
 				return fmt.Errorf("should '1'")
 			}
 			return nil
 		}}, false},
-		{"before error", args{`local a=... return a`, 1, 1, func(s *StoredState) error {
+		{"before error", args{`local a=... return a`, 1, 1, func(s *Vm) error {
 			return errors.New("just ")
-		}, func(s *StoredState) error {
+		}, func(s *Vm) error {
 			if s.CheckString(1) != "1" {
 				return fmt.Errorf("should '1'")
 			}
 			return nil
 		}}, true},
-		{"after error", args{`local a=... return a`, 1, 1, func(s *StoredState) error {
+		{"after error", args{`local a=... return a`, 1, 1, func(s *Vm) error {
 			s.Push(LNumber(1))
 			return nil
-		}, func(s *StoredState) error {
+		}, func(s *Vm) error {
 			return fmt.Errorf("should '1'")
 		}}, true},
-		{"invoke error", args{`local a=... error(tostring(a),1)`, 1, 1, func(s *StoredState) error {
+		{"invoke error", args{`local a=... error(tostring(a),1)`, 1, 1, func(s *Vm) error {
 			s.Push(LNumber(1))
 			return nil
-		}, func(s *StoredState) error {
+		}, func(s *Vm) error {
 			return fmt.Errorf("should '1'")
 		}}, true},
 	}
@@ -140,7 +140,7 @@ func TestOperator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = OpSafe(func(s *StoredState) {
+	err = OpSafe(func(s *Vm) {
 
 	})(s)
 	if err != nil {

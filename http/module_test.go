@@ -2,8 +2,8 @@ package http
 
 import (
 	"bytes"
-	lua "github.com/yuin/gopher-lua"
-	"glu"
+	"github.com/ZenLiuCN/glu"
+	"github.com/yuin/gopher-lua"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -30,20 +30,19 @@ func TestModuleHelp(t *testing.T) {
 	}
 }
 func TestModuleToSlice(t *testing.T) {
-	x := glu.Get()
-	defer glu.Put(x)
-	s := x.LState
+	s := glu.Get()
+	defer glu.Put(s)
 	tab := s.NewTable()
 	tab.RawSetInt(1, lua.LString("1"))
 	tab.RawSetInt(2, lua.LString("2"))
 	tab.RawSetInt(3, lua.LString("3"))
 	s.Push(tab)
-	sl := tableToSlice(s, 1)
+	sl := tableToSlice(s.LState, 1)
 	if sl[0] != "1" || sl[1] != "2" || sl[2] != "3" {
 		t.Fatal()
 	}
 	s.Pop(1)
-	sl = tableToSlice(s, 1)
+	sl = tableToSlice(s.LState, 1)
 	if sl != nil {
 		t.Fatal()
 	}
@@ -65,9 +64,8 @@ func TestModuleToSlice(t *testing.T) {
 	}
 }
 func TestModuleToMultiMap(t *testing.T) {
-	x := glu.Get()
-	defer glu.Put(x)
-	s := x.LState
+	s := glu.Get()
+	defer glu.Put(s)
 	tab := s.NewTable()
 	t1 := s.NewTable()
 	t1.RawSetInt(1, lua.LNumber(3))
@@ -77,25 +75,24 @@ func TestModuleToMultiMap(t *testing.T) {
 	tab.RawSetString("3", t1)
 	s.Push(tab)
 	defer s.Pop(1)
-	sl := tableToMultiMap(s, 1)
+	sl := tableToMultiMap(s.LState, 1)
 	if sl["1"][0] != "1" || sl["2"][0] != "2" || sl["3"][0] != "3" || sl["3"][1] != "b" {
 		t.Fatal()
 	}
 }
 func TestModuleToMap(t *testing.T) {
-	x := glu.Get()
-	defer glu.Put(x)
-	s := x.LState
+	s := glu.Get()
+	defer glu.Put(s)
 	tab := s.NewTable()
 	tab.RawSetString("1", lua.LString("1"))
 	tab.RawSetString("2", lua.LString("2"))
 	s.Push(tab)
-	sl := tableToMap(s, 1)
+	sl := tableToMap(s.LState, 1)
 	if sl["1"] != "1" || sl["2"] != "2" {
 		t.Fatal()
 	}
 	s.Pop(1)
-	sl = tableToMap(s, 1)
+	sl = tableToMap(s.LState, 1)
 	if sl != nil {
 		t.Fatal()
 	}
@@ -194,7 +191,7 @@ assert(a:status()=='200 OK')
 assert(a:size()==100)
 assert(a:header()['V']=="1")
 assert(a:bodyJson():json()=='{"a":1}')
-`, 1, 0, func(s *glu.StoredState) error {
+`, 1, 0, func(s *glu.Vm) error {
 		s.Push(ResType.NewValue(s.LState, r))
 		return nil
 	}, nil)
@@ -220,8 +217,8 @@ assert(a:bodyJson():json()=='{"a":1}')
 	err = glu.ExecuteCode(`
 local a=... 
 assert(a:body()=='{"a":1}')
-`, 1, 0, func(s *glu.StoredState) error {
-		s.Push(ResType.NewValueStoreState(s, r))
+`, 1, 0, func(s *glu.Vm) error {
+		s.Push(ResType.NewValue(s.LState, r))
 		return nil
 	}, nil)
 	if err != nil {

@@ -1,12 +1,12 @@
 package json
 
 import (
-	"glu"
+	. "github.com/ZenLiuCN/glu"
 	"testing"
 )
 
 func TestJsonHelp(t *testing.T) {
-	if err := glu.ExecuteCode(`
+	if err := ExecuteCode(`
 local json=require('json')
 for word in string.gmatch(json.Help(), '([^,]+)') do
 	print(json.Help(word))
@@ -19,14 +19,17 @@ end
 	}
 }
 
-func TestJsonQuery(t *testing.T) {
-	if glu.ExecuteCode(`
+func TestJsonQuery1(t *testing.T) {
+	if ExecuteCode(`
 local j=require('json').Json.new()
 assert(j:at(true))
 `, 0, 0, nil, nil) == nil {
 		t.Fatal()
 	}
-	if err := glu.ExecuteCode(`
+
+}
+func TestJsonQuery2(t *testing.T) {
+	if err := ExecuteCode(`
 local json=require('json')
 local js='{"a":{"a1":1,"a2":true,"a3":"123"},"b":[1,2,3],"c":"c","d":1,"e":1.2,"f":true,"g":false}'
 local j=json.Json.new(js)
@@ -69,8 +72,8 @@ assert(j:path('x')==nil)
 		t.Fatal(err)
 	}
 }
-func TestJsonAppend(t *testing.T) {
-	if err := glu.ExecuteCode(`
+func TestJsonAppend1(t *testing.T) {
+	if err := ExecuteCode(`
 local json=require('json')
 local j=json.Json.new('{"a":1,"b":{"c":1}}')
 assert(j:append(1)==nil)
@@ -78,14 +81,19 @@ assert(j:append("b",1)==nil)
 `, 0, 0, nil, nil); err == nil {
 		t.Fatal()
 	}
-	if err := glu.ExecuteCode(`
+
+}
+func TestJsonAppend2(t *testing.T) {
+	if err := ExecuteCode(`
 local json=require('json')
 local j=json.Json.new('{"a":1,"b":{"c":1}}')
 assert(j:append("b",1)==nil)
 `, 0, 0, nil, nil); err == nil {
 		t.Fatal()
 	}
-	if err := glu.ExecuteCode(`
+}
+func TestJsonAppend3(t *testing.T) {
+	if err := ExecuteCode(`
 local json=require('json')
 local j=json.Json.new('{"a":1}')
 assert(j:append("a",1)==nil)
@@ -102,6 +110,13 @@ assert(j:append("b",nil)==nil) print(j:json())
 assert(j:set("c",json.Json.new())==nil) print(j:json())
 assert(j:append("c",1)==nil) print(j:json())
 assert(j:size("a")==6)
+`, 0, 0, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+}
+func TestJsonAppend4(t *testing.T) {
+	if err := ExecuteCode(`
+local json=require('json')
 local j=json.Json.new()
 assert(j:append(1)==nil)
 assert(j:append(1)==nil) 
@@ -115,15 +130,16 @@ assert(j:size()==5)
 		t.Fatal(err)
 	}
 }
+
 func TestJsonSet(t *testing.T) {
-	if err := glu.ExecuteCode(`
+	if err := ExecuteCode(`
 local json=require('json')
 local j=json.Json.new('{"a":1}')
 assert(j:append(1)==nil)
 `, 0, 0, nil, nil); err == nil {
 		t.Fatal()
 	}
-	if err := glu.ExecuteCode(`
+	if err := ExecuteCode(`
 local json=require('json')
 local j=json.Json.new('{"a":1}')
 assert(j:set("a",1)==nil)
@@ -146,13 +162,13 @@ assert(j:set("",12)==nil) print(j:json())
 	}
 }
 func TestJsonCreate(t *testing.T) {
-	if err := glu.ExecuteCode(`
+	if err := ExecuteCode(`
 local json=require('json')
 local j=json.Json.new({1,2,3})
 `, 0, 0, nil, nil); err == nil {
 		t.Fatal()
 	}
-	if err := glu.ExecuteCode(`
+	if err := ExecuteCode(`
 local json=require('json')
 local Json=json.Json
 local j=json.Json.new()

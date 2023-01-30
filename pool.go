@@ -1,15 +1,16 @@
 package glu
 
 import (
+	"errors"
 	. "github.com/yuin/gopher-lua"
 	"sync"
 )
 
 var (
 	//Option LState configuration
-	Option   = Options{}
-	PoolSize = 4
-	pool     *StatePool
+	Option      = Options{}
+	InitialSize = 4
+	pool        *VmPool
 )
 
 // MakePool manual create statePool , when need to change Option, should invoke once before use Get and Put
@@ -18,7 +19,7 @@ func MakePool() {
 }
 
 // Get LState from statePool
-func Get() *StoredState {
+func Get() *Vm {
 	if pool == nil {
 		MakePool()
 	}
@@ -26,7 +27,7 @@ func Get() *StoredState {
 }
 
 // Put LState back to statePool
-func Put(s *StoredState) {
+func Put(s *Vm) {
 	if pool == nil {
 		MakePool()
 	}
@@ -38,24 +39,62 @@ var (
 	Auto = true
 )
 
-//region Pool
-
-// StoredState take Env snapshot to protect from Global pollution
+// Vm take Env Snapshot to protect from Global pollution
 type (
-	StoredState struct {
+	Vm struct {
 		*LState
-		*shadow
-	}
-	shadow struct {
 		env *LTable
 		reg *LTable
 	}
 )
 
-// eqTo check shadow equality
-func eqTo(t1 *LTable, t2 *LTable) (r bool) {
+// Polluted check if the Env is polluted
+func (s *Vm) Polluted() (r bool) {
+	return !s.regEqual() || !s.TabEqualTo(s.env, s.G.Global)
+}
+
+// Snapshot take snapshot for Env
+func (s *Vm) Snapshot() *Vm {
+	s.reg = s.regCopy(s.G.Registry)
+	s.env = s.TabCopyNew(s.G.Global)
+	return s
+}
+func (s *Vm) restore() {
+	if !s.regEqual() {
+		s.G.Registry = s.regCopy(s.reg)
+	}
+	if !s.TabEqualTo(s.G.Global, s.env) {
+		s.G.Global = s.TabCopyNew(s.env)
+	}
+	s.G.MainThread = nil
+	s.G.CurrentThread = nil
+	s.Parent = nil
+	s.Dead = false
+	s.Env = s.G.Global
+}
+
+var errNotEqual = errors.New("")
+
+func (s *Vm) regEqual() bool {
+	r0 := s.G.Registry
+	r1 := s.reg
+	return s.TabChildEqualTo(r0, r1, "FILE*", "_LOADED", "_LOADERS")
+}
+func (s *Vm) regCopy(r *LTable) *LTable {
+	return s.TabCopyChildNew(r, "FILE*", "_LOADED", "_LOADERS")
+}
+
+func (s *Vm) TabEqualTo(t1 *LTable, t2 *LTable) (r bool) {
 	defer func() {
-		r = recover() == nil
+		if e := recover(); e == nil {
+			r = true
+			return
+		} else if e == errNotEqual {
+			r = false
+			return
+		} else {
+			panic(e)
+		}
 	}()
 	if t1 == t2 {
 		return
@@ -63,57 +102,68 @@ func eqTo(t1 *LTable, t2 *LTable) (r bool) {
 	//fast break need test
 	t1.ForEach(func(key LValue, val LValue) {
 		if t2.RawGet(key) != val {
-			panic("")
+			panic(errNotEqual)
 			return
 		}
 	})
 	return
-}
-
-// copyTo shadow copy
-func copyTo(t1 *LTable, t2 *LTable) {
-	if t1 == t2 {
-		return
-	}
-	t1.ForEach(func(key LValue, val LValue) {
-		t2.RawSetH(key, val)
-	})
-}
-func snapshot(s *LState) *shadow {
-	env := s.NewTable()
-	copyTo(s.G.Global, env)
-	reg := s.NewTable()
-	copyTo(s.G.Registry, reg)
-	return &shadow{
-		env: env,
-		reg: reg,
-	}
-}
-func (a *shadow) equals(s *LState) (r bool) {
-
-	return eqTo(s.G.Global, a.env) && eqTo(s.G.Registry, a.reg)
 
 }
-func (a *shadow) reset(s *LState) {
-	if !eqTo(s.G.Global, a.env) {
-		s.G.Global = s.NewTable()
-		copyTo(a.env, s.G.Global)
+func (s *Vm) TabChildEqualTo(t1 *LTable, t2 *LTable, keys ...string) (r bool) {
+	if keys == nil {
+		return s.TabEqualTo(t1, t2)
 	}
-	if !eqTo(s.G.Registry, a.reg) {
-		s.G.Registry = s.NewTable()
-		copyTo(a.reg, s.G.Registry)
+	for _, v := range keys {
+		c1 := t1.RawGetString(v)
+		c2 := t2.RawGetString(v)
+		if c1.Type() != c2.Type() || c1.Type() != LTTable || LTTable != c2.Type() {
+			return false
+		}
+		if !(s.TabEqualTo(c1.(*LTable), c2.(*LTable))) {
+			return false
+		}
 	}
-	s.G.MainThread = nil
-	s.G.CurrentThread = nil
-	s.Parent = nil
-	s.Dead = false
-	s.Env = s.G.Global
-	//some hack may need
+	return true
+
+}
+func (s *Vm) TabCopyNew(f *LTable) *LTable {
+	t := s.NewTable()
+	f.ForEach(t.RawSetH)
+	return t
+}
+func (s *Vm) TabCopyChildNew(f *LTable, keys ...string) *LTable {
+	if keys == nil {
+		return s.TabCopyNew(f)
+	}
+	t := s.NewTable()
+	for _, v := range keys {
+		c := f.RawGetString(v)
+		if c.Type() == LTTable {
+			t.RawSetString(v, s.TabCopyNew(c.(*LTable)))
+		} else if c != LNil {
+			t.RawSetString(v, c)
+		}
+
+	}
+	return t
 }
 
-// Polluted check if the Env is polluted
-func (s *StoredState) Polluted() (r bool) {
-	return !s.shadow.equals(s.LState)
+// Reset reset Env
+// @fluent
+func (s *Vm) Reset() (r *Vm) {
+	//safeguard
+	defer func() {
+		rc := recover()
+		if rc != nil {
+			r = nil
+		}
+	}()
+	s.LState.Pop(s.LState.GetTop())
+	if s.Polluted() {
+		// reset global https://github.com/ZenLiuCN/glu/issues/1
+		s.restore()
+	}
+	return s
 }
 
 type lib struct {
@@ -136,7 +186,7 @@ var libs = []lib{
 
 // OpenLibsWithout open gopher-lua libs but filter some by name
 // @fluent
-func (s *StoredState) OpenLibsWithout(names ...string) *StoredState {
+func (s *Vm) OpenLibsWithout(names ...string) *Vm {
 	tb := s.FindTable(s.Get(RegistryIndex).(*LTable), "_LOADED", 1)
 	for _, b := range libs {
 		name := b.name
@@ -160,48 +210,26 @@ func (s *StoredState) OpenLibsWithout(names ...string) *StoredState {
 	return s
 }
 
-// snapshot take snapshot for Env
-func (s *StoredState) snapshot() *StoredState {
-	s.shadow = snapshot(s.LState)
-	return s
-}
+//region Pool
 
-// restore reset Env
-// @fluent
-func (s *StoredState) restore() (r *StoredState) {
-	//safeguard
-	defer func() {
-		rc := recover()
-		if rc != nil {
-			r = nil
-		}
-	}()
-	s.LState.Pop(s.LState.GetTop())
-	if s.Polluted() {
-		// reset global https://github.com/ZenLiuCN/glu/issues/1
-		s.shadow.reset(s.LState)
-	}
-	return s
-}
-
-// StatePool threadsafe LState Pool
-type StatePool struct {
+// VmPool threadsafe LState Pool
+type VmPool struct {
 	m     sync.Mutex
-	saved []*StoredState //TODO replace with more effective structure
+	saved []*Vm //TODO replace with more effective structure
 	ctor  func() *LState
 }
 
 // CreatePoolWith create pool with user defined constructor
 //
-//	GluModule will auto registered
-func CreatePoolWith(ctor func() *LState) *StatePool {
-	return &StatePool{saved: make([]*StoredState, 0, PoolSize), ctor: ctor}
+//	GluMod will auto registered
+func CreatePoolWith(ctor func() *LState) *VmPool {
+	return &VmPool{saved: make([]*Vm, 0, InitialSize), ctor: ctor}
 }
-func CreatePool() *StatePool {
-	return &StatePool{saved: make([]*StoredState, 0, PoolSize)}
+func CreatePool() *VmPool {
+	return &VmPool{saved: make([]*Vm, 0, InitialSize)}
 }
 
-func (pl *StatePool) Get() *StoredState {
+func (pl *VmPool) Get() *Vm {
 	pl.m.Lock()
 	defer pl.m.Unlock()
 	n := len(pl.saved)
@@ -213,23 +241,23 @@ func (pl *StatePool) Get() *StoredState {
 	return x
 }
 
-func (pl *StatePool) new() *StoredState {
+func (pl *VmPool) new() *Vm {
 	if pl.ctor != nil {
 		l := pl.ctor()
-		GluModule.PreLoad(l)
-		return (&StoredState{LState: l}).snapshot()
+		GluMod.PreLoad(l)
+		return (&Vm{LState: l}).Snapshot()
 	}
 	L := NewState(Option)
 	configurer(L)
-	return (&StoredState{LState: L}).snapshot()
+	return (&Vm{LState: L}).Snapshot()
 }
 
-func (pl *StatePool) Put(L *StoredState) {
+func (pl *VmPool) Put(L *Vm) {
 	if L.IsClosed() {
 		return
 	}
 	// reset stack
-	l := L.restore()
+	l := L.Reset()
 	if l == nil {
 		return
 	}
@@ -238,15 +266,27 @@ func (pl *StatePool) Put(L *StoredState) {
 	pl.saved = append(pl.saved, l)
 }
 
-func (pl *StatePool) Shutdown() {
+//Recycle the pool space to max size
+func (pl *VmPool) Recycle(max int) {
+	if len(pl.saved) > max {
+		pl.m.Lock()
+		defer pl.m.Unlock()
+		pl.saved = pl.saved[:max]
+	}
+}
+
+func (pl *VmPool) Shutdown() {
+	pl.m.Lock()
+	defer pl.m.Unlock()
 	for _, L := range pl.saved {
 		L.Close()
 	}
+	pl.saved = nil
 }
 
 // endregion
 func configurer(l *LState) {
-	GluModule.PreLoad(l)
+	GluMod.PreLoad(l)
 	if Auto {
 		for _, module := range registry {
 			module.PreLoad(l)

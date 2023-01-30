@@ -1,4 +1,7 @@
 # GLU (glucose) - [gopher-lua](https://github.com/yuin/gopher-lua) module extensions
+## Summary
+### requires
+ + go 1.17 (as gopher-lua required)
 
 ## Packages
 
@@ -11,8 +14,30 @@
 3. √ `http` http server and client library base on [gorilla/mux](https://github.com/gorilla/mux), depends on `json`
 
 ## Samples
+1. use
 
-1. print help
+```go
+package sample
+
+import (
+   "fmt"
+   "github.com/ZenLiuCN/glu"
+   lua "github.com/yuin/gopher-lua"
+)
+
+func main() {
+   fmt.Println(DoSomeScript("1+2")==3.0)
+}
+func DoSomeScript(script string) float64 {
+   vm := glu.Get()
+   defer glu.Put(vm)
+   if err := vm.DoString(script); err != nil {
+      panic(err)
+   }
+   return float64(vm.Pop().(lua.LNumber))
+}
+```
+2. print help
    ```lua
       local http=require('http')
       local json=require('json')
@@ -27,7 +52,7 @@
          print(http.Ctx.Help(word))
       end
    ```
-2. http server
+3. http server
    ```lua
    local http=require('http')
    local server=http.Server.new(':8081') --new Server with listen address
@@ -38,7 +63,7 @@
    server:start(false)
    while (true) do	end
    ```
-3. http client
+4. http client
    ```lua
     local res,err=require('http').Client.new(5):get('http://github.com')
     print(err)

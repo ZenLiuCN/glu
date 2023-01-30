@@ -14,11 +14,11 @@ import (
 )
 
 var (
-	CtxType    *Type
-	ServerType *Type
-	ResType    *Type
-	ClientType *Type
-	HttpModule *Module
+	CtxType    Type
+	ServerType Type
+	ResType    Type
+	ClientType Type
+	HttpModule Module
 	ServerPool map[int64]*Server
 	ClientPool map[int64]*Client
 )
@@ -26,7 +26,7 @@ var (
 func init() {
 	ServerPool = make(map[int64]*Server, 4)
 	ClientPool = make(map[int64]*Client, 4)
-	HttpModule = NewModular("http", `http module built on net/http gorilla/mux, requires json module.
+	HttpModule = NewModule("http", `http module built on net/http gorilla/mux, requires json module.
 http.Ctx       ctx type is an wrap on http.Request and http.ResponseWriter, should never call new!
 http.Res       res type is an wrap on http.Response , should never call new!
 http.Client    client type is an wrap of http.Client. remember to call Client:release when not needed.
@@ -111,8 +111,8 @@ while (true) do	end
 		AddMethod("sendJson", `Ctx:sendJson(json json.Json) ==> send json body,this will close process`,
 			func(s *LState) int {
 				v := chkCtx(s)
-				g := json.JsonTypeCheck(s, 2)
-				v.SendJson(g)
+				g := json.JsonType.CastVar(s, 2)
+				v.SendJson(g.(*gabs.Container))
 				return 0
 			}).
 		AddMethod("sendString", `Ctx:sendString(text string) ==> send text body,this will close process`,
@@ -218,7 +218,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluModule.CheckChunk(s, 3)
+				chunk := GluMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -231,7 +231,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluModule.CheckChunk(s, 3)
+				chunk := GluMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -244,7 +244,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluModule.CheckChunk(s, 3)
+				chunk := GluMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -257,7 +257,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluModule.CheckChunk(s, 3)
+				chunk := GluMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -270,7 +270,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluModule.CheckChunk(s, 3)
+				chunk := GluMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -283,7 +283,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluModule.CheckChunk(s, 3)
+				chunk := GluMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -296,7 +296,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluModule.CheckChunk(s, 3)
+				chunk := GluMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -309,7 +309,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluModule.CheckChunk(s, 3)
+				chunk := GluMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -322,7 +322,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluModule.CheckChunk(s, 3)
+				chunk := GluMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -335,7 +335,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluModule.CheckChunk(s, 3)
+				chunk := GluMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -556,11 +556,11 @@ code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				c := chkClient(s)
 				m := tableToMap(s, 5)
-				m["Content-Type"] = "application/json"
+				m["Content-BaseType"] = "application/json"
 				res, err := c.Do(
 					s.CheckString(2),
 					s.CheckString(3),
-					json.JsonTypeCheck(s, 4).String(),
+					json.JsonType.CastVar(s, 4).(*gabs.Container).String(),
 					m,
 				)
 				if err != nil {
@@ -609,11 +609,11 @@ code string) ==> register handler without method limit.`,
 	HttpModule.AddModule(ServerType)
 	HttpModule.AddModule(ClientType)
 	HttpModule.AddModule(ResType)
-	registry = append(registry, HttpModule)
+	Success(Register(HttpModule))
 }
 func executeHandler(chunk *FunctionProto, c *Ctx) {
-	if err := ExecuteChunk(chunk, 1, 0, func(s *StoredState) error {
-		CtxType.New(s.LState, c)
+	if err := ExecuteChunk(chunk, 1, 0, func(s *LState) error {
+		CtxType.New(s, c)
 		return nil
 	}, nil); err != nil {
 		c.SetStatus(500)

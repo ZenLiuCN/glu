@@ -1,66 +1,214 @@
+// Package glu  support yuin/gopher-lua with easy modular definition and other enchantments.
+// glu.Modular and gua.BaseType will inject mod.Help(name string?) method to output help information.
+// glu.Get: Pool function to get a lua.LState.
+// glu.Put: Pool function to return a lua.LState.
+// glu.registry: shared module registry.
+// glu.Auto: config for autoload modules in registry into lua.LState.
 package glu
 
-import . "github.com/yuin/gopher-lua"
-
-var (
-	//GluModule the global module
-	GluModule = glu(0)
+import (
+	"errors"
+	. "github.com/yuin/gopher-lua"
+	"strings"
 )
 
-const (
-	helpChunk = `chunk(code,name string)(Chunk?,string?) ==> pre compile string into bytecode`
-	helpHelp  = `Help(topic string?)string? ==> fetch help of topic`
-	helpTopic = `?,chunk`
+var (
+	ErrAlreadyExists            = errors.New("element already exists")
+	ErrIndexOverrideWithMethods = errors.New("element both have methods and index overrides")
+	ErrIsTop                    = errors.New("element is top module")
 )
 
 type (
-	Chunk = *FunctionProto
-	glu   int
+	Module interface {
+		Modular
+		// AddFunc add function to this Module
+		//
+		// @name function name, must match lua limitation
+		//
+		// @help help string, if empty will not generate into help
+		//
+		// @fn the LGFunction
+		AddFunc(name string, help string, fn LGFunction) Module
+		// AddField add value field to this Module (static value)
+		//
+		AddField(name string, help string, value LValue) Module
+		// AddModule add submodule to this Module
+		//
+		// @mod the Mod **Note** must with TopLevel false.
+		AddModule(mod Modular) Module
+	}
+	fieldInfo struct {
+		Help  string
+		Value LValue
+	}
+	funcInfo struct {
+		Help string
+		Func LGFunction
+	}
+	//Mod define a Mod only contains Functions and value fields,maybe with submodules
+	Mod struct {
+		Name       string               //Name of Modular
+		Top        bool                 //is top level
+		Help       string               //Help information of this Modular
+		functions  map[string]funcInfo  //registered functions
+		fields     map[string]fieldInfo //registered fields
+		submodules []Modular            //registered sub modules
+
+	}
 )
 
-func (c glu) TopLevel() bool {
-	return true
-}
-func (c glu) CheckChunk(s *LState, n int) Chunk {
-	ud := s.CheckUserData(n)
-	if v, ok := ud.Value.(Chunk); ok {
-		return v
+func helpFn(help map[string]string) LGFunction {
+	key := make([]string, 0, len(help))
+	for s := range help {
+		key = append(key, s)
 	}
-	s.ArgError(n, "chunk expected")
-	return nil
-}
-func (c glu) PreLoad(l *LState) {
-	l.SetGlobal("chunk", l.NewFunction(func(s *LState) int {
-		chunk, err := CompileChunk(s.CheckString(1), s.CheckString(2))
-		if err != nil {
-			s.Push(LNil)
-			s.Push(LString(err.Error()))
-			return 2
-		}
-		ud := s.NewUserData()
-		ud.Value = chunk
-		s.Push(ud)
-		s.Push(LNil)
-		return 2
-	}))
-	l.SetGlobal("Help", l.NewFunction(func(s *LState) int {
+	keys := strings.Join(key, ",")
+	return func(s *LState) int {
 		if s.GetTop() == 0 {
-			s.Push(LString(helpTopic))
-			return 1
-		}
-		topic := s.CheckString(1)
-		switch topic {
-		case "?":
-			s.Push(LString(helpHelp))
-		case "chunk":
-			s.Push(LString(helpChunk))
-		default:
-			s.Push(LNil)
+			s.Push(LString(keys))
+		} else {
+			s.Push(LString(help[s.ToString(1)]))
 		}
 		return 1
-	}))
+	}
 }
 
-func (c glu) PreloadSubModule(l *LState, t *LTable) {
-	panic("implement me")
+// NewModule create New Mod
+func NewModule(name string, help string, top bool) *Mod {
+	return &Mod{Name: name, Help: help, Top: top}
+}
+
+func (m *Mod) TopLevel() bool {
+	return m.Top
+}
+func (m *Mod) GetName() string {
+	return m.Name
+}
+func (m *Mod) PreLoad(l *LState) {
+	if !m.Top {
+		return
+	}
+	l.PreloadModule(m.Name, func(l *LState) int {
+		mod := l.NewTable()
+		fn := make(map[string]LGFunction)
+		help := make(map[string]string)
+		if m.Help != "" {
+			help["?"] = m.Help
+		}
+		if len(m.functions) > 0 {
+			for s, info := range m.functions {
+				fn[s] = info.Func
+				if info.Help != "" {
+					help[s] = info.Help
+				}
+			}
+		}
+		if len(m.fields) > 0 {
+			for key, value := range m.fields {
+				l.SetField(mod, key, value.Value)
+				if value.Help != "" {
+					help[key+"?"] = value.Help
+				}
+			}
+		}
+		if len(m.submodules) > 0 {
+			for _, t := range m.submodules {
+				t.PreloadSubModule(l, mod)
+			}
+		}
+		if len(help) > 0 {
+			fn["Help"] = helpFn(help)
+		}
+		if len(fn) > 0 {
+			l.SetFuncs(mod, fn)
+		}
+		l.Push(mod)
+		return 1
+	})
+}
+func (m *Mod) PreloadSubModule(l *LState, t *LTable) {
+	if m.Top {
+		return
+	}
+	mod := l.NewTable()
+	fn := make(map[string]LGFunction)
+	help := make(map[string]string)
+	if m.Help != "" {
+		help["?"] = m.Help
+	}
+	if len(m.functions) > 0 {
+		for s, info := range m.functions {
+			fn[s] = info.Func
+			if info.Help != "" {
+				help[s] = info.Help
+			}
+		}
+	}
+	if len(m.fields) > 0 {
+		for key, value := range m.fields {
+			l.SetField(mod, key, value.Value)
+			if value.Help != "" {
+				help[key+"?"] = value.Help
+			}
+		}
+	}
+	if len(m.submodules) > 0 {
+		for _, t := range m.submodules {
+			t.PreloadSubModule(l, mod)
+		}
+	}
+	if len(help) > 0 {
+		fn["Help"] = helpFn(help)
+	}
+	if len(fn) > 0 {
+		l.SetFuncs(mod, fn)
+	}
+	l.SetField(t, m.Name, mod)
+}
+
+// AddFunc add function to this Modular
+//
+// @name function name, must match lua limitation
+//
+// @help help string, if empty will not generate into help
+//
+// @fn the LGFunction
+func (m *Mod) AddFunc(name string, help string, fn LGFunction) Module {
+	if m.functions == nil {
+		m.functions = make(map[string]funcInfo)
+	} else if _, ok := m.functions[name]; ok {
+		panic(ErrAlreadyExists)
+	}
+	m.functions[name] = funcInfo{help, fn}
+	return m
+
+}
+
+// AddField add value field to this Modular
+//
+// @name the field name
+//
+// @help help string, if empty will not generate into help
+//
+// @value the field value
+func (m *Mod) AddField(name string, help string, value LValue) Module {
+	if m.fields == nil {
+		m.fields = make(map[string]fieldInfo)
+	} else if _, ok := m.fields[name]; ok {
+		panic(ErrAlreadyExists)
+	}
+	m.fields[name] = fieldInfo{help, value}
+	return m
+}
+
+// AddModule add sub-module to this Modular
+//
+// @mod the Mod **Note** must with TopLevel false.
+func (m *Mod) AddModule(mod Modular) Module {
+	if mod.TopLevel() {
+		panic(ErrIsTop)
+	}
+	m.submodules = append(m.submodules, mod)
+	return m
+
 }

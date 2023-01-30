@@ -69,17 +69,8 @@ func TestStateTrace(t *testing.T) {
 	Put(l)
 	println("after put: ", l.Polluted())
 }
-func Success(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
-func Fail(err error) {
-	if err == nil {
-		panic("should fail")
-	}
-}
-func TestGlu(t *testing.T) {
+
+func TestGluI1(t *testing.T) {
 
 	vmPool := CreatePool()
 	vm := vmPool.Get()
@@ -106,5 +97,5 @@ func TestGlu(t *testing.T) {
 	// What if I set it again?
 	vm.SetGlobal("__SOME_KEY__", LString("YYYYYY"))
 	Equal(LString("YYYYYY"), vm.GetGlobal("__SOME_KEY__"))   // Passed
-	Success(vm.DoString("assert(__SOME_KEY__ == 'YYYYYY')")) // Passed, Nothing in lua
+	Success(vm.DoString("assert(__SOME_KEY__ == 'YYYYYY')")) // Passed
 }
