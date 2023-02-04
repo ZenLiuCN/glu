@@ -309,3 +309,69 @@ func Failed(err error) {
 		panic("should fail")
 	}
 }
+
+var (
+	//ErrorSupress not raise error ,use for SafeFunc
+	ErrorSupress = errors.New("")
+)
+
+//SafeFunc no panic func
+func SafeFunc(fn func(state *LState) int) LGFunction {
+	return func(s *LState) (n int) {
+		defer func() {
+			if r := recover(); r != nil {
+
+				switch r.(type) {
+				case error:
+					if errors.Is(r.(error), ErrorSupress) {
+						break
+					}
+					s.RaiseError("error:%s", r.(error).Error())
+				case string:
+					s.RaiseError("error:%s", r.(string))
+				default:
+					s.RaiseError("error:%#v", r)
+				}
+				n = 0
+			}
+		}()
+		return fn(s)
+	}
+}
+
+//SafeParam extra parameter must match type or panic,use with SafeFunc.
+func SafeParam(s *LState, start int, types ...LValueType) (r []interface{}) {
+	for i, t := range types {
+		v := s.Get(i + start)
+		if v.Type() == t {
+			r = append(r, Raw(v))
+		}
+		s.TypeError(i+start, t)
+		panic(ErrorSupress)
+	}
+	return
+}
+
+//Raw extract raw LValue: nil bool float64 string *LUserData *LState *LTable *LChannel
+func Raw(v LValue) interface{} {
+	switch v.Type() {
+	case LTNil:
+		return nil
+	case LTBool:
+		return v == LTrue
+	case LTNumber:
+		return float64(v.(LNumber))
+	case LTString:
+		return v.String()
+	case LTUserData:
+		return v.(*LUserData)
+	case LTThread:
+		return v.(*LState)
+	case LTTable:
+		return v.(*LTable)
+	case LTChannel:
+		return v.(*LChannel)
+	default:
+		panic(fmt.Sprintf("unknown LuaType: %d", v.Type()))
+	}
+}
