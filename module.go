@@ -87,7 +87,7 @@ func (m *Mod) prepare() {
 		for s, info := range m.functions {
 			if info.Help != "" {
 				help[s] = info.Help
-				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, info.Help))
+				mh.WriteString(fmt.Sprintf("%s.%s %s\n", m.Name, s, info.Help))
 			} else {
 				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, s))
 			}
@@ -96,8 +96,8 @@ func (m *Mod) prepare() {
 	if len(m.fields) > 0 {
 		for key, value := range m.fields {
 			if value.Help != "" {
-				help[key+"?"] = value.Help
-				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, value.Help))
+				help[key] = value.Help
+				mh.WriteString(fmt.Sprintf("%s.%s %s\n", m.Name, key, value.Help))
 			} else {
 				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, key))
 			}
@@ -150,37 +150,29 @@ func (m *Mod) PreloadSubModule(l *LState, t *LTable) {
 	if m.Top {
 		return
 	}
+	m.prepare()
 	mod := l.NewTable()
 	fn := make(map[string]LGFunction)
-	help := make(map[string]string)
-	modHelp := new(strings.Builder) //mod help builder
 
 	if len(m.functions) > 0 {
 		for s, info := range m.functions {
 			fn[s] = info.Func
-			if info.Help != "" {
-				help[s] = info.Help
-			}
 		}
 	}
 	if len(m.fields) > 0 {
 		for key, value := range m.fields {
 			l.SetField(mod, key, value.Value)
-			if value.Help != "" {
-				help[key+"?"] = value.Help
-			}
+
 		}
 	}
 	if len(m.submodules) > 0 {
-		for _, t := range m.submodules {
-			t.PreloadSubModule(l, mod)
+		for _, s := range m.submodules {
+			s.PreloadSubModule(l, mod)
 		}
 	}
-	if modHelp.Len() > 0 {
-		help[HelpKey] = modHelp.String()
-	}
-	if len(help) > 0 {
-		fn[HelpFunc] = helpFn(help)
+
+	if len(m.help) > 0 {
+		fn[HelpFunc] = helpFn(m.help)
 	}
 	if len(fn) > 0 {
 		l.SetFuncs(mod, fn)

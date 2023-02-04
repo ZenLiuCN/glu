@@ -9,23 +9,23 @@ import (
 
 // noinspection GoSnakeCaseUsage,GoUnusedConst
 const (
-	OPERATE_INVALID Operate = iota
-	OPERATE_ADD
-	OPERATE_SUB
-	OPERATE_MUL
-	OPERATE_DIV
-	OPERATE_UNM
-	OPERATE_MOD
-	OPERATE_POW
-	OPERATE_CONCAT
-	OPERATE_EQ
-	OPERATE_LT
-	OPERATE_LE
-	OPERATE_LEN
-	OPERATE_INDEX
-	OPERATE_NEWINDEX
-	OPERATE_TO_STRING
-	OPERATE_CALL
+	OPERATE_INVALID   Operate = iota
+	OPERATE_ADD               // +
+	OPERATE_SUB               // -
+	OPERATE_MUL               // *
+	OPERATE_DIV               // /
+	OPERATE_UNM               // -
+	OPERATE_MOD               // %
+	OPERATE_POW               // ^
+	OPERATE_CONCAT            // ..
+	OPERATE_EQ                // ==
+	OPERATE_LT                // <
+	OPERATE_LE                // <=
+	OPERATE_LEN               // #
+	OPERATE_INDEX             // []
+	OPERATE_NEWINDEX          // []=
+	OPERATE_TO_STRING         // tostring
+	OPERATE_CALL              // ()
 )
 
 type Operate int
@@ -105,7 +105,7 @@ func (m *BaseType) prepare() {
 	if m.Help != "" {
 		mh.WriteString(m.Help)
 		mh.WriteRune('\n')
-	}else{
+	} else {
 		mh.WriteString(m.Name)
 		mh.WriteRune('\n')
 	}
@@ -114,29 +114,29 @@ func (m *BaseType) prepare() {
 		for s, info := range m.functions {
 			if info.Help != "" {
 				help[s] = info.Help
-				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, info.Help))
+				mh.WriteString(fmt.Sprintf("%s.%s %s\n", m.Name, s, info.Help))
 			} else {
 				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, s))
 			}
 		}
 	}
 	if len(m.fields) > 0 {
-		for key, value := range m.fields {
+		for s, value := range m.fields {
 			if value.Help != "" {
-				help[key] = value.Help
-				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, value.Help))
+				help[s] = value.Help
+				mh.WriteString(fmt.Sprintf("%s.%s %s\n", m.Name, s, value.Help))
 			} else {
-				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, key))
+				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, s))
 			}
 		}
 	}
 	if len(m.methods) > 0 {
-		for key, value := range m.methods {
+		for s, value := range m.methods {
 			if value.Help != "" {
-				help[key] = value.Help
-				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, value.Help))
+				help[s] = value.Help
+				mh.WriteString(fmt.Sprintf("%s.%s %s\n", m.Name, s, value.Help))
 			} else {
-				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, key))
+				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, s))
 			}
 		}
 	}
@@ -148,13 +148,13 @@ func (m *BaseType) prepare() {
 
 	if m.constructor != nil {
 		help["new"] = m.HelpCtor
-		mh.WriteString(fmt.Sprintf("%s.new => %s\n", m.Name, m.HelpCtor))
+		mh.WriteString(fmt.Sprintf("%s.new %s\n", m.Name, m.HelpCtor))
 	}
 	if len(m.methods) > 0 {
 		for s, info := range m.methods {
 			if info.Help != "" {
 				help[s] = info.Help
-				mh.WriteString(fmt.Sprintf("%s::%s\n", m.Name, info.Help))
+				mh.WriteString(fmt.Sprintf("%s::%s %s\n", m.Name, s, info.Help))
 			} else {
 				mh.WriteString(fmt.Sprintf("%s::%s\n", m.Name, s))
 			}
@@ -162,51 +162,68 @@ func (m *BaseType) prepare() {
 	}
 	if len(m.override) > 0 {
 		for op, info := range m.override {
+			var sym string
 			var name string
 			switch op {
 			case OPERATE_ADD:
 				name = "__add"
+				sym = "+"
 			case OPERATE_SUB:
 				name = "__sub"
+				sym = "-"
 			case OPERATE_MUL:
 				name = "__mul"
+				sym = "*"
 			case OPERATE_DIV:
 				name = "__div"
+				sym = "/"
 			case OPERATE_UNM:
 				name = "__unm"
+				sym = "-"
 			case OPERATE_MOD:
 				name = "__mod"
+				sym = "%"
 			case OPERATE_POW:
 				name = "__pow"
+				sym = "^"
 			case OPERATE_CONCAT:
 				name = "__concat"
+				sym = ".."
 			case OPERATE_EQ:
 				name = "__eq"
+				sym = "=="
 			case OPERATE_LT:
 				name = "__lt"
+				sym = "<"
 			case OPERATE_LE:
 				name = "__le"
+				sym = "<="
 			case OPERATE_LEN:
 				name = "__len"
+				sym = "#"
 			case OPERATE_NEWINDEX:
 				name = "__newindex"
+				sym = "[]="
 			case OPERATE_TO_STRING:
 				name = "__to_string"
+				sym = "tostring"
 			case OPERATE_CALL:
 				name = "__call"
+				sym = "()"
 			case OPERATE_INDEX:
 				if len(m.methods) > 0 {
 					panic(ErrIndexOverrideWithMethods)
 				}
 				name = "__index"
+				sym = "[]"
 			default:
 				panic(fmt.Errorf("unsupported override of %d", op))
 			}
 			if info.Help != "" {
 				help[name] = info.Help
-				mh.WriteString(fmt.Sprintf("%s::%s\n", m.Name, info.Help))
+				mh.WriteString(fmt.Sprintf("%s::%s %s\n", m.Name, sym, info.Help))
 			} else {
-				mh.WriteString(fmt.Sprintf("%s::%s\n", m.Name, name))
+				mh.WriteString(fmt.Sprintf("%s::%s\n", m.Name, sym))
 			}
 		}
 
