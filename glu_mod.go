@@ -1,16 +1,22 @@
 package glu
 
-import . "github.com/yuin/gopher-lua"
+import (
+	. "github.com/yuin/gopher-lua"
+	"strings"
+)
 
 var (
 	//GluMod the global module
 	GluMod = glu(0)
-)
-
-const (
-	helpChunk = `chunk(code,name string)(Chunk?,string?) ==> pre compile string into bytecode`
-	helpHelp  = `Help(topic string?)string? ==> fetch help of topic`
-	helpTopic = `?,chunk`
+	//HelpKey the module help key
+	HelpKey = "?"
+	//HelpFunc the help function name
+	HelpFunc = "help"
+	//HelpPrompt the prompt for no value supply for help
+	HelpPrompt = "show help with those key word:"
+	HelpChunk  = `chunk(code,name string)(Chunk?,string?) ==> pre compile string into bytecode`
+	HelpHelp   = HelpFunc + `(topic string?)string? ==> fetch help of topic`
+	HelpTopic  = `?,chunk`
 )
 
 type (
@@ -43,17 +49,17 @@ func (c glu) PreLoad(l *LState) {
 		s.Push(LNil)
 		return 2
 	}))
-	l.SetGlobal("Help", l.NewFunction(func(s *LState) int {
+	l.SetGlobal(HelpFunc, l.NewFunction(func(s *LState) int {
 		if s.GetTop() == 0 {
-			s.Push(LString(helpTopic))
+			s.Push(LString(HelpPrompt + HelpTopic))
 			return 1
 		}
 		topic := s.CheckString(1)
 		switch topic {
-		case "?":
-			s.Push(LString(helpHelp))
+		case HelpKey:
+			s.Push(LString(HelpHelp))
 		case "chunk":
-			s.Push(LString(helpChunk))
+			s.Push(LString(HelpChunk))
 		default:
 			s.Push(LNil)
 		}
@@ -63,4 +69,20 @@ func (c glu) PreLoad(l *LState) {
 
 func (c glu) PreloadSubModule(l *LState, t *LTable) {
 	panic("implement me")
+}
+
+func helpFn(help map[string]string) LGFunction {
+	key := make([]string, 0, len(help))
+	for s := range help {
+		key = append(key, s)
+	}
+	keys := HelpPrompt + strings.Join(key, ",")
+	return func(s *LState) int {
+		if s.GetTop() == 0 {
+			s.Push(LString(keys))
+		} else {
+			s.Push(LString(help[s.ToString(1)]))
+		}
+		return 1
+	}
 }

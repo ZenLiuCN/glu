@@ -8,6 +8,7 @@ package glu
 
 import (
 	"errors"
+	"fmt"
 	. "github.com/yuin/gopher-lua"
 	"strings"
 )
@@ -53,25 +54,10 @@ type (
 		functions  map[string]funcInfo  //registered functions
 		fields     map[string]fieldInfo //registered fields
 		submodules []Modular            //registered sub modules
-
+		prepared   bool                 //compute helper and other things, should just do once
+		help       map[string]string    //inner helps
 	}
 )
-
-func helpFn(help map[string]string) LGFunction {
-	key := make([]string, 0, len(help))
-	for s := range help {
-		key = append(key, s)
-	}
-	keys := strings.Join(key, ",")
-	return func(s *LState) int {
-		if s.GetTop() == 0 {
-			s.Push(LString(keys))
-		} else {
-			s.Push(LString(help[s.ToString(1)]))
-		}
-		return 1
-	}
-}
 
 // NewModule create New Mod
 func NewModule(name string, help string, top bool) *Mod {
@@ -84,31 +70,65 @@ func (m *Mod) TopLevel() bool {
 func (m *Mod) GetName() string {
 	return m.Name
 }
+func (m *Mod) prepare() {
+	if m.prepared {
+		return
+	}
+	help := make(map[string]string)
+	mh := new(strings.Builder) //mod help builder
+	if m.Help != "" {
+		mh.WriteString(m.Help)
+		mh.WriteRune('\n')
+	} else {
+		mh.WriteString(m.Name)
+		mh.WriteRune('\n')
+	}
+	if len(m.functions) > 0 {
+		for s, info := range m.functions {
+			if info.Help != "" {
+				help[s] = info.Help
+				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, info.Help))
+			} else {
+				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, s))
+			}
+		}
+	}
+	if len(m.fields) > 0 {
+		for key, value := range m.fields {
+			if value.Help != "" {
+				help[key+"?"] = value.Help
+				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, value.Help))
+			} else {
+				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, key))
+			}
+		}
+	}
+	if len(m.submodules) > 0 {
+		for _, t := range m.submodules {
+			mh.WriteString(fmt.Sprintf("%s.%s \n", m.Name, t.GetName()))
+		}
+	}
+	if mh.Len() > 0 {
+		help["?"] = mh.String()
+	}
+	m.prepared = true
+}
 func (m *Mod) PreLoad(l *LState) {
 	if !m.Top {
 		return
 	}
+	m.prepare()
 	l.PreloadModule(m.Name, func(l *LState) int {
 		mod := l.NewTable()
 		fn := make(map[string]LGFunction)
-		help := make(map[string]string)
-		if m.Help != "" {
-			help["?"] = m.Help
-		}
 		if len(m.functions) > 0 {
 			for s, info := range m.functions {
 				fn[s] = info.Func
-				if info.Help != "" {
-					help[s] = info.Help
-				}
 			}
 		}
 		if len(m.fields) > 0 {
 			for key, value := range m.fields {
 				l.SetField(mod, key, value.Value)
-				if value.Help != "" {
-					help[key+"?"] = value.Help
-				}
 			}
 		}
 		if len(m.submodules) > 0 {
@@ -116,8 +136,8 @@ func (m *Mod) PreLoad(l *LState) {
 				t.PreloadSubModule(l, mod)
 			}
 		}
-		if len(help) > 0 {
-			fn["Help"] = helpFn(help)
+		if len(m.help) > 0 {
+			fn["Help"] = helpFn(m.help)
 		}
 		if len(fn) > 0 {
 			l.SetFuncs(mod, fn)
@@ -133,9 +153,8 @@ func (m *Mod) PreloadSubModule(l *LState, t *LTable) {
 	mod := l.NewTable()
 	fn := make(map[string]LGFunction)
 	help := make(map[string]string)
-	if m.Help != "" {
-		help["?"] = m.Help
-	}
+	modHelp := new(strings.Builder) //mod help builder
+
 	if len(m.functions) > 0 {
 		for s, info := range m.functions {
 			fn[s] = info.Func
@@ -157,8 +176,11 @@ func (m *Mod) PreloadSubModule(l *LState, t *LTable) {
 			t.PreloadSubModule(l, mod)
 		}
 	}
+	if modHelp.Len() > 0 {
+		help[HelpKey] = modHelp.String()
+	}
 	if len(help) > 0 {
-		fn["Help"] = helpFn(help)
+		fn[HelpFunc] = helpFn(help)
 	}
 	if len(fn) > 0 {
 		l.SetFuncs(mod, fn)

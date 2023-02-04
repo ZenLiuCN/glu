@@ -262,13 +262,15 @@ func TableUnpack(s *LTable, noLua bool, history map[LValue]interface{}) (r map[i
 func Recover(act func()) (err error) {
 	defer func() {
 		r := recover()
-		switch r.(type) {
-		case error:
-			err = r.(error)
-		case string:
-			err = errors.New(r.(string))
-		default:
-			err = fmt.Errorf(`%#v`, r)
+		if r != nil {
+			switch r.(type) {
+			case error:
+				err = r.(error)
+			case string:
+				err = errors.New(r.(string))
+			default:
+				err = fmt.Errorf(`%#v`, r)
+			}
 		}
 	}()
 	act()
@@ -279,13 +281,15 @@ func Recover(act func()) (err error) {
 func RecoverErr(act func() error) (err error) {
 	defer func() {
 		r := recover()
-		switch r.(type) {
-		case error:
-			err = r.(error)
-		case string:
-			err = errors.New(r.(string))
-		default:
-			err = fmt.Errorf(`%#v`, r)
+		if r != nil {
+			switch r.(type) {
+			case error:
+				err = r.(error)
+			case string:
+				err = errors.New(r.(string))
+			default:
+				err = fmt.Errorf(`%#v`, r)
+			}
 		}
 	}()
 	err = act()

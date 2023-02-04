@@ -4,6 +4,7 @@ import (
 	"fmt"
 	. "github.com/yuin/gopher-lua"
 	"reflect"
+	"strings"
 )
 
 // noinspection GoSnakeCaseUsage,GoUnusedConst
@@ -70,6 +71,7 @@ type Type interface {
 // BaseType define a LTable with MetaTable, which mimicry class like action in Lua
 type BaseType struct {
 	Mod
+	HelpCtor    string
 	signature   reflect.Type              //reflect.Type
 	constructor func(*LState) interface{} //Constructor for this BaseType , also can define other Constructor by add functions
 	methods     map[string]funcInfo
@@ -77,17 +79,144 @@ type BaseType struct {
 	override    map[Operate]funcInfo
 }
 
+// NewSimpleType create new BaseType without ctor
+func NewSimpleType(name string, help string, top bool) *BaseType {
+	return &BaseType{Mod: Mod{Name: name, Top: top, Help: help}}
+}
+
 // NewType create new BaseType
-func NewType(name string, help string, top bool, ctor func(*LState) interface{}) *BaseType {
-	return &BaseType{Mod: Mod{Name: name, Top: top, Help: help}, constructor: ctor}
+func NewType(name string, help string, top bool, ctorHelp string, ctor func(*LState) interface{}) *BaseType {
+	return &BaseType{Mod: Mod{Name: name, Top: top, Help: help}, constructor: ctor, HelpCtor: ctorHelp}
 }
 
 // NewTypeCast create new BaseType with reflect Signature
-func NewTypeCast(sample interface{}, name string, help string, top bool, ctor func(*LState) interface{}) *BaseType {
-	return &BaseType{Mod: Mod{Name: name, Top: top, Help: help}, signature: reflect.TypeOf(sample), constructor: ctor}
+func NewTypeCast(sample interface{}, name string, help string, top bool, ctorHelp string, ctor func(*LState) interface{}) *BaseType {
+	return &BaseType{Mod: Mod{Name: name, Top: top, Help: help}, signature: reflect.TypeOf(sample), constructor: ctor, HelpCtor: ctorHelp}
 }
 func (m *BaseType) Type() reflect.Type {
 	return m.signature
+}
+func (m *BaseType) prepare() {
+	if m.prepared {
+		return
+	}
+	help := make(map[string]string)
+	mh := new(strings.Builder) //mod help builder
+	if m.Help != "" {
+		mh.WriteString(m.Help)
+		mh.WriteRune('\n')
+	}else{
+		mh.WriteString(m.Name)
+		mh.WriteRune('\n')
+	}
+
+	if len(m.functions) > 0 {
+		for s, info := range m.functions {
+			if info.Help != "" {
+				help[s] = info.Help
+				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, info.Help))
+			} else {
+				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, s))
+			}
+		}
+	}
+	if len(m.fields) > 0 {
+		for key, value := range m.fields {
+			if value.Help != "" {
+				help[key] = value.Help
+				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, value.Help))
+			} else {
+				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, key))
+			}
+		}
+	}
+	if len(m.methods) > 0 {
+		for key, value := range m.methods {
+			if value.Help != "" {
+				help[key] = value.Help
+				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, value.Help))
+			} else {
+				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, key))
+			}
+		}
+	}
+	if len(m.submodules) > 0 {
+		for _, t := range m.submodules {
+			mh.WriteString(fmt.Sprintf("%s.%s \n", m.Name, t.GetName()))
+		}
+	}
+
+	if m.constructor != nil {
+		help["new"] = m.HelpCtor
+		mh.WriteString(fmt.Sprintf("%s.new => %s\n", m.Name, m.HelpCtor))
+	}
+	if len(m.methods) > 0 {
+		for s, info := range m.methods {
+			if info.Help != "" {
+				help[s] = info.Help
+				mh.WriteString(fmt.Sprintf("%s::%s\n", m.Name, info.Help))
+			} else {
+				mh.WriteString(fmt.Sprintf("%s::%s\n", m.Name, s))
+			}
+		}
+	}
+	if len(m.override) > 0 {
+		for op, info := range m.override {
+			var name string
+			switch op {
+			case OPERATE_ADD:
+				name = "__add"
+			case OPERATE_SUB:
+				name = "__sub"
+			case OPERATE_MUL:
+				name = "__mul"
+			case OPERATE_DIV:
+				name = "__div"
+			case OPERATE_UNM:
+				name = "__unm"
+			case OPERATE_MOD:
+				name = "__mod"
+			case OPERATE_POW:
+				name = "__pow"
+			case OPERATE_CONCAT:
+				name = "__concat"
+			case OPERATE_EQ:
+				name = "__eq"
+			case OPERATE_LT:
+				name = "__lt"
+			case OPERATE_LE:
+				name = "__le"
+			case OPERATE_LEN:
+				name = "__len"
+			case OPERATE_NEWINDEX:
+				name = "__newindex"
+			case OPERATE_TO_STRING:
+				name = "__to_string"
+			case OPERATE_CALL:
+				name = "__call"
+			case OPERATE_INDEX:
+				if len(m.methods) > 0 {
+					panic(ErrIndexOverrideWithMethods)
+				}
+				name = "__index"
+			default:
+				panic(fmt.Errorf("unsupported override of %d", op))
+			}
+			if info.Help != "" {
+				help[name] = info.Help
+				mh.WriteString(fmt.Sprintf("%s::%s\n", m.Name, info.Help))
+			} else {
+				mh.WriteString(fmt.Sprintf("%s::%s\n", m.Name, name))
+			}
+		}
+
+	}
+
+	if mh.Len() > 0 {
+		help[HelpKey] = mh.String()
+	}
+	m.prepared = true
+
 }
 
 // AddFunc add function to this Modular
@@ -127,6 +256,7 @@ func (m *BaseType) PreLoad(l *LState) {
 	if !m.Top {
 		return
 	}
+
 	l.SetGlobal(m.Name, m.getOrBuildMeta(l))
 }
 func (m *BaseType) PreloadSubModule(l *LState, t *LTable) {
@@ -137,6 +267,7 @@ func (m *BaseType) PreloadSubModule(l *LState, t *LTable) {
 }
 
 func (m *BaseType) getOrBuildMeta(l *LState) *LTable {
+	m.prepare()
 	var mt *LTable
 	var ok bool
 	if mt, ok = l.GetTypeMetatable(m.Name).(*LTable); ok {
@@ -144,27 +275,17 @@ func (m *BaseType) getOrBuildMeta(l *LState) *LTable {
 	}
 	mt = l.NewTypeMetatable(m.Name)
 	fn := make(map[string]LGFunction)
-	help := make(map[string]string)
-	if m.Help != "" {
-		help["?"] = m.Help
-	}
 	if m.constructor != nil {
 		l.SetField(mt, "new", l.NewFunction(m.new))
 	}
 	if len(m.functions) > 0 {
 		for s, info := range m.functions {
 			fn[s] = info.Func
-			if info.Help != "" {
-				help[s] = info.Help
-			}
 		}
 	}
 	if len(m.fields) > 0 {
 		for key, value := range m.fields {
 			l.SetField(mt, key, value.Value)
-			if value.Help != "" {
-				help[key+"?"] = value.Help
-			}
 		}
 	}
 	if len(m.submodules) > 0 {
@@ -176,9 +297,6 @@ func (m *BaseType) getOrBuildMeta(l *LState) *LTable {
 		method := make(map[string]LGFunction, len(m.functions))
 		for s, info := range m.methods {
 			method[s] = info.Func
-			if info.Help != "" {
-				help[s] = info.Help
-			}
 		}
 		// methods
 		mt.RawSetString("__index", l.SetFuncs(l.NewTable(), method))
@@ -226,15 +344,12 @@ func (m *BaseType) getOrBuildMeta(l *LState) *LTable {
 			default:
 				panic(fmt.Errorf("unsupported override of %d", op))
 			}
-			if info.Help != "" {
-				help[name] = info.Help
-			}
 			l.SetField(mt, name, l.NewFunction(info.Func))
 		}
 
 	}
-	if len(help) > 0 {
-		fn["Help"] = helpFn(help)
+	if len(m.help) > 0 {
+		fn[HelpFunc] = helpFn(m.help)
 	}
 	if len(fn) > 0 {
 		l.SetFuncs(mt, fn)
