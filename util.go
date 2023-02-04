@@ -5,6 +5,7 @@ import (
 	"fmt"
 	. "github.com/yuin/gopher-lua"
 	"github.com/yuin/gopher-lua/parse"
+	"reflect"
 	"strings"
 )
 
@@ -352,6 +353,20 @@ func SafeParam(s *LState, start int, types ...LValueType) (r []interface{}) {
 	return
 }
 
+//SafeOpt opt param with SafeFunc
+func SafeOpt(s *LState, at int, t LValueType) interface{} {
+	if s.GetTop() >= at {
+		v := s.Get(at)
+		if v.Type() == t {
+			return Raw(v)
+		} else {
+			s.TypeError(at, t)
+			panic(ErrorSupress)
+		}
+	}
+	return nil
+}
+
 //Raw extract raw LValue: nil bool float64 string *LUserData *LState *LTable *LChannel
 func Raw(v LValue) interface{} {
 	switch v.Type() {
@@ -374,4 +389,73 @@ func Raw(v LValue) interface{} {
 	default:
 		panic(fmt.Sprintf("unknown LuaType: %d", v.Type()))
 	}
+}
+
+//Pack any to LValue.
+//
+//1. nil, bool, numbers and other Lua value packed as normal LValue
+//
+//2. array, slice,map[string]any packed into LTable (the elements also packed)
+//
+//3. others are packed into LUserData
+func Pack(v interface{}, s *LState) LValue {
+	switch v.(type) {
+	case nil:
+		return LNil
+	case LValue:
+		return v.(LValue)
+	case bool:
+		return LBool(v.(bool))
+	case string:
+		return LString(v.(string))
+	case *LState:
+		return v.(*LState)
+	case *LFunction:
+		return v.(*LFunction)
+	case *LTable:
+		return v.(*LTable)
+	case *LUserData:
+		return v.(*LUserData)
+	case *LChannel:
+		return v.(*LChannel)
+	default:
+		vv := reflect.ValueOf(v)
+		switch {
+		case vv.Kind() < reflect.Complex64:
+			switch {
+			case vv.CanInt():
+				return LNumber(vv.Int())
+			case vv.CanFloat():
+				return LNumber(vv.Float())
+			default:
+				panic(fmt.Sprintf("unknown : %#v", v))
+			}
+		case vv.Kind() == reflect.Array || vv.Kind() == reflect.Slice:
+			t := s.NewTable()
+			for i := 0; i < vv.Len(); i++ {
+				t.Insert(i, Pack(vv.Index(i).Interface(), s))
+			}
+			return t
+		case vv.Kind() == reflect.Map:
+			kt := vv.Type().Key()
+			if (kt.Kind() > reflect.Bool && kt.Kind() < reflect.Complex64) || kt.Kind() == reflect.String {
+				t := s.NewTable()
+				r := vv.MapRange()
+				for r.Next() {
+					k := Pack(r.Key().Interface(), s)
+					val := Pack(r.Value().Interface(), s)
+					t.RawSet(k, val)
+				}
+				return t
+			}
+			u := s.NewUserData()
+			u.Value = v
+			return u
+		default:
+			u := s.NewUserData()
+			u.Value = v
+			return u
+		}
+	}
+
 }

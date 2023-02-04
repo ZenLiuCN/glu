@@ -1,6 +1,7 @@
 package glu
 
 import (
+	"errors"
 	"fmt"
 	. "github.com/yuin/gopher-lua"
 	"reflect"
@@ -406,12 +407,29 @@ func (m BaseType) NewValue(l *LState, val interface{}) *LUserData {
 }
 
 // new internal creator
-func (m BaseType) new(l *LState) int {
-	val := m.constructor(l)
-	ud := l.NewUserData()
+func (m BaseType) new(s *LState) (n int) {
+	defer func() {
+		if r := recover(); r != nil {
+
+			switch r.(type) {
+			case error:
+				if errors.Is(r.(error), ErrorSupress) {
+					break
+				}
+				s.RaiseError("error:%s", r.(error).Error())
+			case string:
+				s.RaiseError("error:%s", r.(string))
+			default:
+				s.RaiseError("error:%#v", r)
+			}
+			n = 0
+		}
+	}()
+	val := m.constructor(s)
+	ud := s.NewUserData()
 	ud.Value = val
-	l.SetMetatable(ud, l.GetTypeMetatable(m.Name))
-	l.Push(ud)
+	s.SetMetatable(ud, s.GetTypeMetatable(m.Name))
+	s.Push(ud)
 	return 1
 }
 
