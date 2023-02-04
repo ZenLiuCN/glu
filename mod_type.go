@@ -249,6 +249,13 @@ func (m *BaseType) AddFunc(name string, help string, fn LGFunction) Type {
 
 }
 
+//SafeFun warp with SafeFunc
+func (m *BaseType) SafeFun(name string, help string, fn LGFunction) Type {
+	m.Mod.AddFunc(name, help, SafeFunc(fn))
+	return m
+
+}
+
 // AddField add value field to this Modular
 //
 // @name the field name
@@ -440,6 +447,17 @@ func (m *BaseType) AddMethod(name string, help string, value LGFunction) Type {
 	return m
 }
 
+//SafeMethod warp with SafeFunc
+func (m *BaseType) SafeMethod(name string, help string, value LGFunction) Type {
+	if m.methods == nil {
+		m.methods = make(map[string]funcInfo)
+	} else if _, ok := m.methods[name]; ok {
+		panic(ErrAlreadyExists)
+	}
+	m.methods[name] = funcInfo{help, SafeFunc(value)}
+	return m
+}
+
 // AddMethodUserData add method to this type which means instance method, with auto extract first argument.
 func (m *BaseType) AddMethodUserData(name string, help string, act func(s *LState, data *LUserData) int) Type {
 	return m.AddMethod(name, help, func(s *LState) int {
@@ -477,6 +495,17 @@ func (m *BaseType) Override(op Operate, help string, fn LGFunction) Type {
 		panic(ErrAlreadyExists)
 	}
 	m.override[op] = funcInfo{help, fn}
+	return m
+}
+
+//SafeOverride wrap with SafeFunc
+func (m *BaseType) SafeOverride(op Operate, help string, fn LGFunction) Type {
+	if m.override == nil {
+		m.override = make(map[Operate]funcInfo)
+	} else if _, ok := m.override[op]; ok {
+		panic(ErrAlreadyExists)
+	}
+	m.override[op] = funcInfo{help, SafeFunc(fn)}
 	return m
 }
 

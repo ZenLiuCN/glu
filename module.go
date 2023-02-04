@@ -198,6 +198,18 @@ func (m *Mod) AddFunc(name string, help string, fn LGFunction) Module {
 
 }
 
+//SafeFun warp with SafeFunc
+func (m *Mod) SafeFun(name string, help string, fn LGFunction) Module {
+	if m.functions == nil {
+		m.functions = make(map[string]funcInfo)
+	} else if _, ok := m.functions[name]; ok {
+		panic(ErrAlreadyExists)
+	}
+	m.functions[name] = funcInfo{help, SafeFunc(fn)}
+	return m
+
+}
+
 // AddField add value field to this Modular
 //
 // @name the field name

@@ -36,7 +36,7 @@ func (c glu) CheckChunk(s *LState, n int) Chunk {
 	return nil
 }
 func (c glu) PreLoad(l *LState) {
-	l.SetGlobal("chunk", l.NewFunction(func(s *LState) int {
+	l.SetGlobal("chunk", l.NewFunction(SafeFunc(func(s *LState) int {
 		chunk, err := CompileChunk(s.CheckString(1), s.CheckString(2))
 		if err != nil {
 			s.Push(LNil)
@@ -48,8 +48,8 @@ func (c glu) PreLoad(l *LState) {
 		s.Push(ud)
 		s.Push(LNil)
 		return 2
-	}))
-	l.SetGlobal(HelpFunc, l.NewFunction(func(s *LState) int {
+	})))
+	l.SetGlobal(HelpFunc, l.NewFunction(SafeFunc(func(s *LState) int {
 		if s.GetTop() == 0 {
 			s.Push(LString(HelpPrompt + HelpTopic))
 			return 1
@@ -64,7 +64,7 @@ func (c glu) PreLoad(l *LState) {
 			s.Push(LNil)
 		}
 		return 1
-	}))
+	})))
 }
 
 func (c glu) PreloadSubModule(l *LState, t *LTable) {
