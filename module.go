@@ -26,16 +26,19 @@ type (
 		//
 		// @name function name, must match lua limitation
 		//
-		// @help help string, if empty will not generate into help
+		// @help help string, if empty will generate just Module.Function as help
 		//
 		// @fn the LGFunction
 		AddFunc(name string, help string, fn LGFunction) Module
+
+		//SafeFun warp with SafeFunc,see AddFunc for detail
+		SafeFun(name string, help string, value LGFunction) Module
+
 		// AddField add value field to this Module (static value)
-		//
 		AddField(name string, help string, value LValue) Module
 		// AddModule add submodule to this Module
 		//
-		// @mod the Mod **Note** must with TopLevel false.
+		// @mod the Mod , requires Mod.TopLevel is false.
 		AddModule(mod Modular) Module
 	}
 	fieldInfo struct {

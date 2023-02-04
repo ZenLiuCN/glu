@@ -46,9 +46,13 @@ type Type interface {
 
 	// AddFunc static function
 	AddFunc(name string, help string, fn LGFunction) Type
+	//SafeFun warp with SafeFunc
+	SafeFun(name string, help string, value LGFunction) Type
+
 	// AddField static field
 	AddField(name string, help string, value LValue) Type
-
+	//SafeMethod warp with SafeFunc
+	SafeMethod(name string, help string, value LGFunction) Type
 	// AddMethod add method to this type which means instance method.
 	AddMethod(name string, help string, value LGFunction) Type
 
@@ -60,6 +64,9 @@ type Type interface {
 
 	// Override override an operator
 	Override(op Operate, help string, fn LGFunction) Type
+
+	//SafeOverride warp with SafeFunc
+	SafeOverride(op Operate, help string, value LGFunction) Type
 
 	// OverrideUserData see Override and AddMethodUserData
 	OverrideUserData(op Operate, help string, act func(s *LState, u *LUserData) int) Type
