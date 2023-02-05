@@ -24,8 +24,8 @@ type Modular interface {
 var (
 	//HelpKey the module HelpCache key
 	HelpKey = "?"
-	//HelpFunc the HelpCache function name
-	HelpFunc = "HelpCache"
+	//HelpFunc the help function name
+	HelpFunc = "help"
 	//HelpPrompt the prompt for no value supply for HelpCache
 	HelpPrompt = "show HelpCache with those key word: "
 	HelpChunk  = `chunk(code,name string)(Chunk?,string?) ==> pre compile string into bytecode`
