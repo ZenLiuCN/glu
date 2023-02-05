@@ -78,7 +78,7 @@ type Type interface {
 
 // BaseType define a LTable with MetaTable, which mimicry class like action in Lua
 type BaseType struct {
-	Mod
+	*Mod
 	HelpCtor    string
 	signature   reflect.Type              //reflect.Type
 	constructor func(*LState) interface{} //Constructor for this BaseType , also can define other Constructor by add functions
@@ -89,17 +89,17 @@ type BaseType struct {
 
 // NewSimpleType create new BaseType without ctor
 func NewSimpleType(name string, help string, top bool) *BaseType {
-	return &BaseType{Mod: Mod{Name: name, Top: top, Help: help}}
+	return &BaseType{Mod: &Mod{Name: name, Top: top, Help: help}}
 }
 
 // NewType create new BaseType
 func NewType(name string, help string, top bool, ctorHelp string, ctor func(*LState) interface{}) *BaseType {
-	return &BaseType{Mod: Mod{Name: name, Top: top, Help: help}, constructor: ctor, HelpCtor: ctorHelp}
+	return &BaseType{Mod: &Mod{Name: name, Top: top, Help: help}, constructor: ctor, HelpCtor: ctorHelp}
 }
 
 // NewTypeCast create new BaseType with reflect Signature
 func NewTypeCast(sample interface{}, name string, help string, top bool, ctorHelp string, ctor func(*LState) interface{}) *BaseType {
-	return &BaseType{Mod: Mod{Name: name, Top: top, Help: help}, signature: reflect.TypeOf(sample), constructor: ctor, HelpCtor: ctorHelp}
+	return &BaseType{Mod: &Mod{Name: name, Top: top, Help: help}, signature: reflect.TypeOf(sample), constructor: ctor, HelpCtor: ctorHelp}
 }
 func (m *BaseType) Type() reflect.Type {
 	return m.signature
