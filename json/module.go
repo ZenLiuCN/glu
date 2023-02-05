@@ -30,10 +30,8 @@ func init() {
 		}
 		return nil, ""
 	}
-	JsonModule = NewModule("json", `module json is wrap of jeffail/gabs as dynamic json tool.
-json.Json  ==> type, json container.
-`, true)
-	JsonType = NewTypeCast(new(Container), "Json", `Json.new(json string?)Json? ==> create Json instance.`, false,
+	JsonModule = NewModule("json", `json is wrap of jeffail/gabs as dynamic json tool.`, true)
+	JsonType = NewTypeCast(new(Container), "Json", `JSON object`, false, `(json string?)Json? ==> create Json instance.`,
 		func(s *LState) interface{} {
 			if s.GetTop() == 1 {
 				v, err := ParseJSON([]byte(s.CheckString(1)))
@@ -45,7 +43,7 @@ json.Json  ==> type, json container.
 			}
 			return New()
 		}).
-		AddMethodCast("json", `Json:json(pretty boolean=false,ident string='\t')string ==> json string of the Json, if empty will be '{}'.`,
+		AddMethodCast("json", `(pretty boolean=false,ident string='\t')string ==> json string of the Json, if empty will be '{}'.`,
 			func(s *LState, data interface{}) int {
 				v := data.(*Container)
 				if s.GetTop() >= 2 {
@@ -63,7 +61,7 @@ json.Json  ==> type, json container.
 				s.Push(LString(v.String()))
 				return 1
 			}).
-		AddMethodCast("path", `Json:path(path string?)Json?  ==> fetch Json by path, path is gabs path.`,
+		AddMethodCast("path", `(path string?)Json?  ==> fetch Json by path, path is gabs path.`,
 			func(s *LState, data interface{}) int {
 				v := data.(*Container)
 				p := s.CheckString(2)
@@ -73,14 +71,14 @@ json.Json  ==> type, json container.
 				s.Push(LNil)
 				return 1
 			}).
-		AddMethodCast("exists", `Json:exists(path string?)boolean  ==> check existence of path.`,
+		AddMethodCast("exists", `(path string?)boolean  ==> check existence of path.`,
 			func(s *LState, data interface{}) int {
 				v := data.(*Container)
 				p, _ := checkPath(s, v, 0)
 				s.Push(LBool(p != nil))
 				return 1
 			}).
-		AddMethodCast("at", `Json:at(key int|string)Json?  ==> fetch value at index for array or key for object.`,
+		AddMethodCast("at", `(key int|string)Json?  ==> fetch value at index for array or key for object.`,
 			func(s *LState, data interface{}) int {
 				v := data.(*Container)
 				s.CheckTypes(2, LTString, LTNumber)
@@ -105,7 +103,7 @@ json.Json  ==> type, json container.
 				return 0
 			},
 		).
-		AddMethodCast("type", `Json:type()int  ==> fetch JSON type: 0 nil,1 string,2 number,3 boolean,4 array,5 object.`,
+		AddMethodCast("type", `()int  ==> fetch JSON type: 0 nil,1 string,2 number,3 boolean,4 array,5 object.`,
 			func(s *LState, data interface{}) int {
 				v := data.(*Container)
 				if _, ok := v.Data().(string); ok {
@@ -123,7 +121,7 @@ json.Json  ==> type, json container.
 				}
 				return 1
 			}).
-		AddMethodCast("set", `Json:set(path string?, json JSON|string|number|bool|nil)string?  ==> set value at path.if value is nil,will delete it.this can't append array.'`,
+		AddMethodCast("set", `(path string?, json JSON|string|number|bool|nil)string?  ==> set value at path.if value is nil,will delete it.this can't append array.'`,
 			func(s *LState, data interface{}) int {
 				v := data.(*Container)
 				idx := 2
@@ -172,7 +170,7 @@ json.Json  ==> type, json container.
 				}
 				return 0
 			}).
-		AddMethodCast("append", `Json:append(path string?, json JSON|string|number|bool|nil)string?  ==> append value, path must pointer to array.`,
+		AddMethodCast("append", `(path string?, json JSON|string|number|bool|nil)string?  ==> append value, path must pointer to array.`,
 			func(s *LState, data interface{}) int {
 				c := data.(*Container)
 				_, p := checkPath(s, c, 1)
@@ -252,7 +250,7 @@ json.Json  ==> type, json container.
 				}
 				return 0
 			}).
-		AddMethodCast("isArray", `Json:isArray(path string?)bool  ==> check if it's array at path.`,
+		AddMethodCast("isArray", `(path string?)bool  ==> check if it's array at path.`,
 			func(s *LState, data interface{}) int {
 				c := data.(*Container)
 				v, _ := checkPath(s, c, 0)
@@ -267,7 +265,7 @@ json.Json  ==> type, json container.
 				}
 				return 1
 			}).
-		AddMethodCast("isObject", `Json:isObject(path string?)bool  ==> check if it's object at path.`,
+		AddMethodCast("isObject", `(path string?)bool  ==> check if it's object at path.`,
 			func(s *LState, data interface{}) int {
 				c := data.(*Container)
 				v, _ := checkPath(s, c, 0)
@@ -281,7 +279,7 @@ json.Json  ==> type, json container.
 
 				return 1
 			}).
-		AddMethodCast("bool", `Json:bool(path string?)bool  ==> fetch value as boolean, if not exists return false.`,
+		AddMethodCast("bool", `(path string?)bool  ==> fetch value as boolean, if not exists return false.`,
 			func(s *LState, data interface{}) int {
 				c := data.(*Container)
 				v, _ := checkPath(s, c, 0)
@@ -296,7 +294,7 @@ json.Json  ==> type, json container.
 				}
 				return 1
 			}).
-		AddMethodCast("string", `Json:string(path string?)string?  ==> fetch value as string, if not exists or not string return nil.`,
+		AddMethodCast("string", `(path string?)string?  ==> fetch value as string, if not exists or not string return nil.`,
 			func(s *LState, data interface{}) int {
 				c := data.(*Container)
 				v, _ := checkPath(s, c, 0)
@@ -309,7 +307,7 @@ json.Json  ==> type, json container.
 				}
 				return 1
 			}).
-		AddMethodCast("number", `Json:number(path string?)number?  ==> fetch value as number, if not exists return nil.`,
+		AddMethodCast("number", `(path string?)number?  ==> fetch value as number, if not exists return nil.`,
 			func(s *LState, data interface{}) int {
 				c := data.(*Container)
 				v, _ := checkPath(s, c, 0)
@@ -322,7 +320,7 @@ json.Json  ==> type, json container.
 				}
 				return 1
 			}).
-		AddMethodCast("size", `Json:size(path string?)number?  ==> fetch  object size or array size else nil.`,
+		AddMethodCast("size", `(path string?)number?  ==> fetch  object size or array size else nil.`,
 			func(s *LState, data interface{}) int {
 				c := data.(*Container)
 				v, _ := checkPath(s, c, 0)
@@ -339,7 +337,7 @@ json.Json  ==> type, json container.
 			})
 
 	JsonModule.
-		AddFunc("from", `json.from(val table|number|string|boolean)Json ==> create json from value`,
+		AddFunc("from", `(val table|number|string|boolean)Json ==> create json from value`,
 			func(s *LState) int {
 				s.CheckTypes(1, LTString, LTNumber, LTBool, LTTable)
 				v := s.Get(1)

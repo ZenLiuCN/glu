@@ -6,22 +6,13 @@ import (
 )
 
 var (
-	//GluMod the global module
-	GluMod = glu(0)
-	//HelpKey the module help key
-	HelpKey = "?"
-	//HelpFunc the help function name
-	HelpFunc = "help"
-	//HelpPrompt the prompt for no value supply for help
-	HelpPrompt = "show help with those key word:"
-	HelpChunk  = `chunk(code,name string)(Chunk?,string?) ==> pre compile string into bytecode`
-	HelpHelp   = HelpFunc + `(topic string?)string? ==> fetch help of topic`
-	HelpTopic  = `?,chunk`
+	//BaseMod the global module
+	BaseMod = glu(map[string]string{})
 )
 
 type (
 	Chunk = *FunctionProto
-	glu   int
+	glu   map[string]string
 )
 
 func (c glu) TopLevel() bool {
@@ -50,12 +41,24 @@ func (c glu) PreLoad(l *LState) {
 		return 2
 	})))
 	l.SetGlobal(HelpFunc, l.NewFunction(SafeFunc(func(s *LState) int {
-		if s.GetTop() == 0 {
-			s.Push(LString(HelpPrompt + HelpTopic))
+		if s.GetTop() < 1 {
+			if i, ok := c["mod"]; ok {
+				s.Push(LString(i))
+				return 1
+			}
+			sub := new(strings.Builder)
+			sub.WriteString(HelpHelp)
+			sub.WriteString("\nExists loadable modules:\n")
+			l.G.Global.RawGetString("package").(*LTable).RawGetString("preload").(*LTable).ForEach(func(k LValue, _ LValue) {
+				sub.WriteString(k.String() + " module \n")
+			})
+			i := sub.String()
+			s.Push(LString(i))
+			c["mod"] = i
 			return 1
 		}
-		topic := s.CheckString(1)
-		switch topic {
+		t := s.CheckString(1)
+		switch t {
 		case HelpKey:
 			s.Push(LString(HelpHelp))
 		case "chunk":
@@ -69,20 +72,4 @@ func (c glu) PreLoad(l *LState) {
 
 func (c glu) PreloadSubModule(l *LState, t *LTable) {
 	panic("implement me")
-}
-
-func helpFn(help map[string]string) LGFunction {
-	key := make([]string, 0, len(help))
-	for s := range help {
-		key = append(key, s)
-	}
-	keys := HelpPrompt + strings.Join(key, ",")
-	return func(s *LState) int {
-		if s.GetTop() == 0 {
-			s.Push(LString(keys))
-		} else {
-			s.Push(LString(help[s.ToString(1)]))
-		}
-		return 1
-	}
 }

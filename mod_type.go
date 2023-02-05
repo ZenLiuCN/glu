@@ -63,7 +63,7 @@ type Type interface {
 	// AddMethodCast prechecked type (only create with NewTypeCast).
 	AddMethodCast(name string, help string, act func(s *LState, i interface{}) int) Type
 
-	// Override override an operator
+	// Override operators an operator
 	Override(op Operate, help string, fn LGFunction) Type
 
 	//SafeOverride warp with SafeFunc
@@ -84,7 +84,7 @@ type BaseType struct {
 	constructor func(*LState) interface{} //Constructor for this BaseType , also can define other Constructor by add functions
 	methods     map[string]funcInfo
 	fields      map[string]fieldInfo
-	override    map[Operate]funcInfo
+	operators   map[Operate]funcInfo
 }
 
 // NewSimpleType create new BaseType without ctor
@@ -117,129 +117,17 @@ func (m *BaseType) prepare() {
 		mh.WriteString(m.Name)
 		mh.WriteRune('\n')
 	}
-
-	if len(m.functions) > 0 {
-		for s, info := range m.functions {
-			if info.Help != "" {
-				help[s] = info.Help
-				mh.WriteString(fmt.Sprintf("%s.%s %s\n", m.Name, s, info.Help))
-			} else {
-				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, s))
-			}
-		}
-	}
-	if len(m.fields) > 0 {
-		for s, value := range m.fields {
-			if value.Help != "" {
-				help[s] = value.Help
-				mh.WriteString(fmt.Sprintf("%s.%s %s\n", m.Name, s, value.Help))
-			} else {
-				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, s))
-			}
-		}
-	}
-	if len(m.methods) > 0 {
-		for s, value := range m.methods {
-			if value.Help != "" {
-				help[s] = value.Help
-				mh.WriteString(fmt.Sprintf("%s.%s %s\n", m.Name, s, value.Help))
-			} else {
-				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, s))
-			}
-		}
-	}
-	if len(m.submodules) > 0 {
-		for _, t := range m.submodules {
-			mh.WriteString(fmt.Sprintf("%s.%s \n", m.Name, t.GetName()))
-		}
-	}
-
-	if m.constructor != nil {
-		help["new"] = m.HelpCtor
-		mh.WriteString(fmt.Sprintf("%s.new %s\n", m.Name, m.HelpCtor))
-	}
-	if len(m.methods) > 0 {
-		for s, info := range m.methods {
-			if info.Help != "" {
-				help[s] = info.Help
-				mh.WriteString(fmt.Sprintf("%s::%s %s\n", m.Name, s, info.Help))
-			} else {
-				mh.WriteString(fmt.Sprintf("%s::%s\n", m.Name, s))
-			}
-		}
-	}
-	if len(m.override) > 0 {
-		for op, info := range m.override {
-			var sym string
-			var name string
-			switch op {
-			case OPERATE_ADD:
-				name = "__add"
-				sym = "+"
-			case OPERATE_SUB:
-				name = "__sub"
-				sym = "-"
-			case OPERATE_MUL:
-				name = "__mul"
-				sym = "*"
-			case OPERATE_DIV:
-				name = "__div"
-				sym = "/"
-			case OPERATE_UNM:
-				name = "__unm"
-				sym = "-"
-			case OPERATE_MOD:
-				name = "__mod"
-				sym = "%"
-			case OPERATE_POW:
-				name = "__pow"
-				sym = "^"
-			case OPERATE_CONCAT:
-				name = "__concat"
-				sym = ".."
-			case OPERATE_EQ:
-				name = "__eq"
-				sym = "=="
-			case OPERATE_LT:
-				name = "__lt"
-				sym = "<"
-			case OPERATE_LE:
-				name = "__le"
-				sym = "<="
-			case OPERATE_LEN:
-				name = "__len"
-				sym = "#"
-			case OPERATE_NEWINDEX:
-				name = "__newindex"
-				sym = "[]="
-			case OPERATE_TO_STRING:
-				name = "__to_string"
-				sym = "tostring"
-			case OPERATE_CALL:
-				name = "__call"
-				sym = "()"
-			case OPERATE_INDEX:
-				if len(m.methods) > 0 {
-					panic(ErrIndexOverrideWithMethods)
-				}
-				name = "__index"
-				sym = "[]"
-			default:
-				panic(fmt.Errorf("unsupported override of %d", op))
-			}
-			if info.Help != "" {
-				help[name] = info.Help
-				mh.WriteString(fmt.Sprintf("%s::%s %s\n", m.Name, sym, info.Help))
-			} else {
-				mh.WriteString(fmt.Sprintf("%s::%s\n", m.Name, sym))
-			}
-		}
-
-	}
+	helpFuncReg(m.functions, help, mh, m.Name)
+	helpFieldReg(m.fields, help, mh, m.Name)
+	helpMethodReg(m.methods, help, mh, m.Name)
+	helpOperatorReg(m.operators, len(m.methods) > 0, help, mh, m.Name)
+	helpSubModReg(m.submodules, help, mh, m.Name)
+	helpCtorReg(m.constructor, m.HelpCtor, help, mh, m.Name)
 
 	if mh.Len() > 0 {
 		help[HelpKey] = mh.String()
 	}
+	m.help = help
 	m.prepared = true
 
 }
@@ -334,8 +222,8 @@ func (m *BaseType) getOrBuildMeta(l *LState) *LTable {
 		mt.RawSetString("__index", l.SetFuncs(l.NewTable(), method))
 		//l.SetField(mt, "__index", l.SetFuncs(l.NewTable(), method))
 	}
-	if len(m.override) > 0 {
-		for op, info := range m.override {
+	if len(m.operators) > 0 {
+		for op, info := range m.operators {
 			var name string
 			switch op {
 			case OPERATE_ADD:
@@ -374,7 +262,7 @@ func (m *BaseType) getOrBuildMeta(l *LState) *LTable {
 				}
 				name = "__index"
 			default:
-				panic(fmt.Errorf("unsupported override of %d", op))
+				panic(fmt.Errorf("unsupported operators of %d", op))
 			}
 			l.SetField(mt, name, l.NewFunction(info.Func))
 		}
@@ -512,25 +400,25 @@ func (m *BaseType) AddMethodCast(name string, help string, act func(s *LState, d
 	})
 }
 
-// Override override an operator
+// Override operators an operator
 func (m *BaseType) Override(op Operate, help string, fn LGFunction) Type {
-	if m.override == nil {
-		m.override = make(map[Operate]funcInfo)
-	} else if _, ok := m.override[op]; ok {
+	if m.operators == nil {
+		m.operators = make(map[Operate]funcInfo)
+	} else if _, ok := m.operators[op]; ok {
 		panic(ErrAlreadyExists)
 	}
-	m.override[op] = funcInfo{help, fn}
+	m.operators[op] = funcInfo{help, fn}
 	return m
 }
 
 //SafeOverride wrap with SafeFunc
 func (m *BaseType) SafeOverride(op Operate, help string, fn LGFunction) Type {
-	if m.override == nil {
-		m.override = make(map[Operate]funcInfo)
-	} else if _, ok := m.override[op]; ok {
+	if m.operators == nil {
+		m.operators = make(map[Operate]funcInfo)
+	} else if _, ok := m.operators[op]; ok {
 		panic(ErrAlreadyExists)
 	}
-	m.override[op] = funcInfo{help, SafeFunc(fn)}
+	m.operators[op] = funcInfo{help, SafeFunc(fn)}
 	return m
 }
 

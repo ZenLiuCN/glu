@@ -7,16 +7,8 @@
 package glu
 
 import (
-	"errors"
-	"fmt"
 	. "github.com/yuin/gopher-lua"
 	"strings"
-)
-
-var (
-	ErrAlreadyExists            = errors.New("element already exists")
-	ErrIndexOverrideWithMethods = errors.New("element both have methods and index overrides")
-	ErrIsTop                    = errors.New("element is top module")
 )
 
 type (
@@ -73,6 +65,9 @@ func (m *Mod) TopLevel() bool {
 func (m *Mod) GetName() string {
 	return m.Name
 }
+func (m *Mod) GetHelp() string {
+	return m.Help
+}
 func (m *Mod) prepare() {
 	if m.prepared {
 		return
@@ -86,34 +81,14 @@ func (m *Mod) prepare() {
 		mh.WriteString(m.Name)
 		mh.WriteRune('\n')
 	}
-	if len(m.functions) > 0 {
-		for s, info := range m.functions {
-			if info.Help != "" {
-				help[s] = info.Help
-				mh.WriteString(fmt.Sprintf("%s.%s %s\n", m.Name, s, info.Help))
-			} else {
-				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, s))
-			}
-		}
-	}
-	if len(m.fields) > 0 {
-		for key, value := range m.fields {
-			if value.Help != "" {
-				help[key] = value.Help
-				mh.WriteString(fmt.Sprintf("%s.%s %s\n", m.Name, key, value.Help))
-			} else {
-				mh.WriteString(fmt.Sprintf("%s.%s\n", m.Name, key))
-			}
-		}
-	}
-	if len(m.submodules) > 0 {
-		for _, t := range m.submodules {
-			mh.WriteString(fmt.Sprintf("%s.%s \n", m.Name, t.GetName()))
-		}
-	}
+	helpFuncReg(m.functions, help, mh, m.Name)
+	helpFieldReg(m.fields, help, mh, m.Name)
+	helpSubModReg(m.submodules, help, mh, m.Name)
+
 	if mh.Len() > 0 {
-		help["?"] = mh.String()
+		help[HelpKey] = mh.String()
 	}
+	m.help = help
 	m.prepared = true
 }
 func (m *Mod) PreLoad(l *LState) {
@@ -140,7 +115,7 @@ func (m *Mod) PreLoad(l *LState) {
 			}
 		}
 		if len(m.help) > 0 {
-			fn["Help"] = helpFn(m.help)
+			fn[HelpFunc] = helpFn(m.help)
 		}
 		if len(fn) > 0 {
 			l.SetFuncs(mod, fn)
@@ -173,7 +148,6 @@ func (m *Mod) PreloadSubModule(l *LState, t *LTable) {
 			s.PreloadSubModule(l, mod)
 		}
 	}
-
 	if len(m.help) > 0 {
 		fn[HelpFunc] = helpFn(m.help)
 	}

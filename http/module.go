@@ -26,12 +26,7 @@ var (
 func init() {
 	ServerPool = make(map[int64]*Server, 4)
 	ClientPool = make(map[int64]*Client, 4)
-	HttpModule = NewModule("http", `http module built on net/http gorilla/mux, requires json module.
-http.Ctx       ctx type is an wrap on http.Request and http.ResponseWriter, should never call new!
-http.Res       res type is an wrap on http.Response , should never call new!
-http.Client    client type is an wrap of http.Client. remember to call Client:release when not needed.
-http.Server server type is wrap with mux.Router and http.Server. remember to call Server:stop and Server:release when not needed.
-IMPORTANT: Server handler should be an independent lua function in Chunk form, minimal sample as below:
+	HttpModule = NewModule("http", `http module built on net/http gorilla/mux, requires json module. minimal sample as below:
 local http=require('http')
 local json=require('json')
 local server=http.Server.new(':8081')
@@ -52,36 +47,32 @@ while (true) do	end
 		s.ArgError(1, "http.Ctx expected")
 		return nil
 	}
-	CtxType = NewType("Ctx", ``, false,
-		func(s *LState) interface{} {
-			s.RaiseError("not allow to create ctx instance")
-			return nil
-		}).
-		AddMethod("vars", `Ctx:vars(name string)string ==> fetch path variable`,
+	CtxType = NewType("Ctx", `http request context`, false, "", nil).
+		SafeMethod("vars", `Ctx:vars(name string)string ==> fetch path variable`,
 			func(s *LState) int {
 				v := chkCtx(s)
 				s.Push(LString(v.Vars(s.CheckString(2))))
 				return 1
 			}).
-		AddMethod("header", `Ctx:header(name string)string ==> fetch request header`,
+		SafeMethod("header", `Ctx:header(name string)string ==> fetch request header`,
 			func(s *LState) int {
 				v := chkCtx(s)
 				s.Push(LString(v.Header(s.CheckString(2))))
 				return 1
 			}).
-		AddMethod("query", `Ctx:query(name string)string ==> fetch request query parameter`,
+		SafeMethod("query", `Ctx:query(name string)string ==> fetch request query parameter`,
 			func(s *LState) int {
 				v := chkCtx(s)
 				s.Push(LString(v.Query(s.CheckString(2))))
 				return 1
 			}).
-		AddMethod("method", `Ctx:method()string ==> fetch request method`,
+		SafeMethod("method", `Ctx:method()string ==> fetch request method`,
 			func(s *LState) int {
 				v := chkCtx(s)
 				s.Push(LString(v.Method()))
 				return 1
 			}).
-		AddMethod("body", `Ctx:body()json.Json ==> fetch request body`,
+		SafeMethod("body", `Ctx:body()json.Json ==> fetch request body`,
 			func(s *LState) int {
 				v := chkCtx(s)
 				body, err := v.Body()
@@ -91,7 +82,7 @@ while (true) do	end
 				}
 				return json.JsonType.New(s, body)
 			}).
-		AddMethod("setHeader", `Ctx:setHeader(key,value string)Ctx ==> chain method set output header`,
+		SafeMethod("setHeader", `Ctx:setHeader(key,value string)Ctx ==> chain method set output header`,
 			func(s *LState) int {
 				ud := s.ToUserData(1)
 				v := chkCtx(s)
@@ -101,28 +92,28 @@ while (true) do	end
 				s.Push(ud)
 				return 1
 			}).
-		AddMethod("setStatus", `Ctx:setStatus(code int) ==> send http status,this will close process`,
+		SafeMethod("setStatus", `Ctx:setStatus(code int) ==> send http status,this will close process`,
 			func(s *LState) int {
 				v := chkCtx(s)
 				s.CheckTypes(2, LTNumber)
 				v.SetStatus(s.ToInt(2))
 				return 0
 			}).
-		AddMethod("sendJson", `Ctx:sendJson(json json.Json) ==> send json body,this will close process`,
+		SafeMethod("sendJson", `Ctx:sendJson(json json.Json) ==> send json body,this will close process`,
 			func(s *LState) int {
 				v := chkCtx(s)
 				g := json.JsonType.CastVar(s, 2)
 				v.SendJson(g.(*gabs.Container))
 				return 0
 			}).
-		AddMethod("sendString", `Ctx:sendString(text string) ==> send text body,this will close process`,
+		SafeMethod("sendString", `Ctx:sendString(text string) ==> send text body,this will close process`,
 			func(s *LState) int {
 				v := chkCtx(s)
 				g := s.CheckString(2)
 				v.SendString(g)
 				return 0
 			}).
-		AddMethod("sendFile", `Ctx:sendFile(path string) ==> send file,this will close process`,
+		SafeMethod("sendFile", `Ctx:sendFile(path string) ==> send file,this will close process`,
 			func(s *LState) int {
 				v := chkCtx(s)
 				s.CheckTypes(2, LTString)
@@ -143,7 +134,7 @@ while (true) do	end
 		s.ArgError(1, "http.Server expected")
 		return nil
 	}
-	ServerType = NewType("Server", `Server.new(addr string)`, false,
+	ServerType = NewType("Server", `Http Server`, false, `(addr string)`,
 		func(s *LState) interface{} {
 			s.CheckType(1, LTString)
 			srv := NewServer(s.ToString(1), func(s string) {
@@ -153,7 +144,7 @@ while (true) do	end
 			ServerPool[srv.ID] = srv
 			return srv
 		}).
-		AddMethod("stop", `Server:stop(seconds int) ==> stop server graceful`,
+		SafeMethod("stop", `(seconds int) => stop server graceful`,
 			func(s *LState) int {
 				v := chkServer(s)
 				s.CheckType(2, LTNumber)
@@ -163,7 +154,7 @@ while (true) do	end
 				}
 				return 0
 			}).
-		AddMethod("running", `Server:running()bool ==> check server is running`,
+		SafeMethod("running", `()bool => check server is running`,
 			func(s *LState) int {
 				v := chkServer(s)
 				if v.Running() {
@@ -173,7 +164,7 @@ while (true) do	end
 				}
 				return 1
 			}).
-		AddMethod("start", `Server:start(
+		SafeMethod("start", `(
     cors bool,                          ==> enable cors or not,default false.
 	allowHeader    []string?,           ==> cors config for header allowed.
 	allowedMethods []string?,           ==> cors config for methods allowed.
@@ -213,12 +204,12 @@ while (true) do	end
 				}
 				return 0
 			}).
-		AddMethod("route", `Server:route(path string,  ==> code should be string code slice with function handle http.Ctx
+		SafeMethod("route", `(path string,  ==> code should be string code slice with function handle http.Ctx
 code string) ==> register handler without method limit.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluMod.CheckChunk(s, 3)
+				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -227,11 +218,11 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("get", `Server:get(path string, handler Chunk) ==> register handler limit with GET.`,
+		SafeMethod("get", `(path string, handler Chunk) ==> register handler limit with GET.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluMod.CheckChunk(s, 3)
+				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -240,11 +231,11 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("post", `Server:post(path string, handler Chunk) ==> register handler limit with POST.`,
+		SafeMethod("post", `(path string, handler Chunk) ==> register handler limit with POST.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluMod.CheckChunk(s, 3)
+				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -253,11 +244,11 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("put", `Server:put(path string, handler Chunk) ==> register handler limit with POST.`,
+		SafeMethod("put", `(path string, handler Chunk) ==> register handler limit with POST.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluMod.CheckChunk(s, 3)
+				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -266,11 +257,11 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("head", `Server:head(path string,handler Chunk) ==> register handler limit with HEAD.`,
+		SafeMethod("head", `(path string,handler Chunk) ==> register handler limit with HEAD.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluMod.CheckChunk(s, 3)
+				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -279,11 +270,11 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("patch", `Server:patch(path string,handler Chunk) ==> register handler limit with PATCH.`,
+		SafeMethod("patch", `(path string,handler Chunk) ==> register handler limit with PATCH.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluMod.CheckChunk(s, 3)
+				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -292,11 +283,11 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("delete", `Server:delete(path string,handler Chunk) ==> register handler limit with DELETE.`,
+		SafeMethod("delete", `(path string,handler Chunk) ==> register handler limit with DELETE.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluMod.CheckChunk(s, 3)
+				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -305,11 +296,11 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("connect", `Server:connect(path string,handler Chunk) ==> register handler limit with CONNECT.`,
+		SafeMethod("connect", `(path string,handler Chunk) ==> register handler limit with CONNECT.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluMod.CheckChunk(s, 3)
+				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -318,11 +309,11 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("options", `Server:options(path string,handler Chunk) ==> register handler limit with OPTIONS.should not use if with cors enable`,
+		SafeMethod("options", `(path string,handler Chunk) ==> register handler limit with OPTIONS.should not use if with cors enable`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluMod.CheckChunk(s, 3)
+				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -331,11 +322,11 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("trace", `Server:trace(path string,handler Chunk) ==> register handler limit with TRACE.`,
+		SafeMethod("trace", `(path string,handler Chunk) ==> register handler limit with TRACE.`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
-				chunk := GluMod.CheckChunk(s, 3)
+				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
 					return 0
 				}
@@ -344,7 +335,7 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		AddMethod("files", `Server:files(path ,prefix, dir string) ==> register path to service with dir`,
+		SafeMethod("files", `(path ,prefix, dir string) ==> register path to service with dir`,
 			func(s *LState) int {
 				v := chkServer(s)
 				route := s.CheckString(2)
@@ -353,7 +344,7 @@ code string) ==> register handler without method limit.`,
 				v.File(route, pfx, file)
 				return 0
 			}).
-		AddMethod("release", `Server:release() ==> release this server`,
+		SafeMethod("release", `release() ==> release this server`,
 			func(s *LState) int {
 				v := chkServer(s)
 				if v.Running() {
@@ -362,12 +353,12 @@ code string) ==> register handler without method limit.`,
 				delete(ServerPool, v.ID)
 				return 0
 			}).
-		AddFunc("pool", `Server.pool()int ==> current pooled server size`,
+		SafeFun("pool", `()int ==> current pooled server size`,
 			func(s *LState) int {
 				s.Push(LNumber(len(ServerPool)))
 				return 1
 			}).
-		AddFunc("poolKeys", `Server.poolKeys()[]int64 ==> current pool server keys`,
+		SafeFun("poolKeys", `()[]int64 ==> current pool server keys`,
 			func(s *LState) int {
 				t := s.NewTable()
 				n := 1
@@ -378,7 +369,7 @@ code string) ==> register handler without method limit.`,
 				s.Push(t)
 				return 1
 			}).
-		AddFunc("pooled", `Server.pooled(key int64)Server? ==> fetch from pool`,
+		SafeFun("pooled", `(key int64)Server? ==> fetch from pool`,
 			func(s *LState) int {
 				k := s.CheckInt64(1)
 				if v, ok := ServerPool[k]; ok {
@@ -399,30 +390,26 @@ code string) ==> register handler without method limit.`,
 		s.ArgError(1, "http.Res expected")
 		return nil
 	}
-	ResType = NewType("Res", ``, false,
-		func(s *LState) interface{} {
-			s.RaiseError("not allow to create ctx instance")
-			return nil
-		}).
-		AddMethod("statusCode", `Res:statusCode()int`,
+	ResType = NewType("Res", ``, false, ``, nil).
+		SafeMethod("statusCode", `()int`,
 			func(s *LState) int {
 				c := chkRes(s)
 				s.Push(LNumber(c.StatusCode))
 				return 1
 			}).
-		AddMethod("status", `Res:status()string`,
+		SafeMethod("status", `()string`,
 			func(s *LState) int {
 				c := chkRes(s)
 				s.Push(LString(c.Status))
 				return 1
 			}).
-		AddMethod("size", `Res:size()int ==> content size in bytes`,
+		SafeMethod("size", `()int ==> content size in bytes`,
 			func(s *LState) int {
 				c := chkRes(s)
 				s.Push(LNumber(c.ContentLength))
 				return 1
 			}).
-		AddMethod("header", `Res:header()map[string]string`,
+		SafeMethod("header", `()map[string]string`,
 			func(s *LState) int {
 				c := chkRes(s)
 				t := s.NewTable()
@@ -432,7 +419,7 @@ code string) ==> register handler without method limit.`,
 				s.Push(t)
 				return 1
 			}).
-		AddMethod("body", `Res:body()string ==> read body as string,body should only read once.`,
+		SafeMethod("body", `()string ==> read body as string,body should only read once.`,
 			func(s *LState) int {
 				c := chkRes(s)
 				defer c.Body.Close()
@@ -444,7 +431,7 @@ code string) ==> register handler without method limit.`,
 				s.Push(LString(buf))
 				return 1
 			}).
-		AddMethod("bodyJson", `Res:bodyJson()(json.Json?,string?) ==> read body as Json,body should only read once.`,
+		SafeMethod("bodyJson", `()(json.Json?,string?) ==> read body as Json,body should only read once.`,
 			func(s *LState) int {
 				c := chkRes(s)
 				defer c.Body.Close()
@@ -475,13 +462,13 @@ code string) ==> register handler without method limit.`,
 		s.ArgError(1, "http.Client expected")
 		return nil
 	}
-	ClientType = NewType("Client", `client.new(timeoutSeconds int)`, false,
+	ClientType = NewType("Client", `http client `, false, `(timeoutSeconds int)Client`,
 		func(s *LState) interface{} {
 			c := NewClient(time.Duration(s.CheckInt(1)) * time.Second)
 			ClientPool[c.ID] = c
 			return c
 		}).
-		AddMethod("get", `Client:get(url string)(Res?,error?) ==>perform GET request`,
+		SafeMethod("get", `(url string)(Res?,error?) ==>perform GET request`,
 			func(s *LState) int {
 				c := chkClient(s)
 				res, err := c.Get(s.CheckString(2))
@@ -494,7 +481,7 @@ code string) ==> register handler without method limit.`,
 				}
 				return 2
 			}).
-		AddMethod("post", `Client:post(url,contentType, data string)(Res?,error?) ==>perform POST request`,
+		SafeMethod("post", `(url,contentType, data string)(Res?,error?) ==>perform POST request`,
 			func(s *LState) int {
 				c := chkClient(s)
 				res, err := c.Post(s.CheckString(2), s.CheckString(3), s.CheckString(4))
@@ -507,7 +494,7 @@ code string) ==> register handler without method limit.`,
 				}
 				return 2
 			}).
-		AddMethod("head", `Client:head(url string)(Res?,error?) ==>perform HEAD request`,
+		SafeMethod("head", `(url string)(Res?,error?) ==>perform HEAD request`,
 			func(s *LState) int {
 				c := chkClient(s)
 				res, err := c.Head(s.CheckString(2))
@@ -520,7 +507,7 @@ code string) ==> register handler without method limit.`,
 				}
 				return 2
 			}).
-		AddMethod("form", `Client:form(url string, form map[string][]string)(Res?,error?) ==>perform POST form request`,
+		SafeMethod("form", `(url string, form map[string][]string)(Res?,error?) ==>perform POST form request`,
 			func(s *LState) int {
 				c := chkClient(s)
 				h := tableToMultiMap(s, 3)
@@ -534,7 +521,7 @@ code string) ==> register handler without method limit.`,
 				}
 				return 2
 			}).
-		AddMethod("do", `Client:do(method, url, data string, header map[string]string)(Res?,error?) ==>perform  request`,
+		SafeMethod("do", `do(method, url, data string, header map[string]string)(Res?,error?) ==>perform  request`,
 			func(s *LState) int {
 				c := chkClient(s)
 				res, err := c.Do(
@@ -552,7 +539,7 @@ code string) ==> register handler without method limit.`,
 				}
 				return 2
 			}).
-		AddMethod("doJson", `Client:doJson(method, url string,data json.Json, header map[string]string)(Res?,error?) ==>perform request`,
+		SafeMethod("doJson", `(method, url string,data json.Json, header map[string]string)(Res?,error?) ==>perform request`,
 			func(s *LState) int {
 				c := chkClient(s)
 				m := tableToMap(s, 5)
@@ -572,18 +559,18 @@ code string) ==> register handler without method limit.`,
 				}
 				return 2
 			}).
-		AddMethod("release", `Client:release() ==>release this client`,
+		SafeMethod("release", `release() ==>release this client`,
 			func(s *LState) int {
 				c := chkClient(s)
 				delete(ClientPool, c.ID)
 				return 0
 			}).
-		AddFunc("pool", `Client.pool()int ==> current in pool Client size`,
+		SafeFun("pool", `()int ==> current in pool Client size`,
 			func(s *LState) int {
 				s.Push(LNumber(len(ClientPool)))
 				return 1
 			}).
-		AddFunc("poolKeys", `Client.poolKeys()[]int64 ==> current pool Client keys`,
+		SafeFun("poolKeys", `()[]int64 ==> current pool Client keys`,
 			func(s *LState) int {
 				t := s.NewTable()
 				n := 1
@@ -594,7 +581,7 @@ code string) ==> register handler without method limit.`,
 				s.Push(t)
 				return 1
 			}).
-		AddFunc("pooled", `Client.pooled(key int64)Server? ==> fetch from pool`,
+		SafeFun("pooled", `(key int64)Server? ==> fetch from pool`,
 			func(s *LState) int {
 				k := s.CheckInt64(1)
 				if v, ok := ClientPool[k]; ok {
@@ -612,8 +599,8 @@ code string) ==> register handler without method limit.`,
 	Success(Register(HttpModule))
 }
 func executeHandler(chunk *FunctionProto, c *Ctx) {
-	if err := ExecuteChunk(chunk, 1, 0, func(s *LState) error {
-		CtxType.New(s, c)
+	if err := ExecuteChunk(chunk, 1, 0, func(s *Vm) error {
+		CtxType.New(s.LState, c)
 		return nil
 	}, nil); err != nil {
 		c.SetStatus(500)

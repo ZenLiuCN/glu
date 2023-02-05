@@ -6,13 +6,16 @@ import (
 )
 
 func TestJsonHelp(t *testing.T) {
+	if err := ExecuteCode(`print(help())`, 0, 0, nil, nil); err != nil {
+		t.Fatal(err)
+	}
 	if err := ExecuteCode(`
 local json=require('json')
-for word in string.gmatch(json.Help(), '([^,]+)') do
-	print(json.Help(word))
+for word in string.gmatch(json.help(), '([^,]+)') do
+	print(json.help(word))
 end
-for word in string.gmatch(json.Json.Help(), '([^,]+)') do
-	print(json.Json.Help(word))
+for word in string.gmatch(json.Json.help(), '([^,]+)') do
+	print(json.Json.help(word))
 end
 `, 0, 0, nil, nil); err != nil {
 		t.Fatal(err)

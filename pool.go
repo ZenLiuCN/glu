@@ -2,7 +2,9 @@ package glu
 
 import (
 	"errors"
+	"fmt"
 	. "github.com/yuin/gopher-lua"
+	"strings"
 	"sync"
 )
 
@@ -50,7 +52,7 @@ type (
 
 // Polluted check if the Env is polluted
 func (s *Vm) Polluted() (r bool) {
-	return !s.regEqual() || !s.TabEqualTo(s.env, s.G.Global)
+	return !s.regEqual() || !s.TabEqualTo(s.G.Global, s.env)
 }
 
 // Snapshot take snapshot for Env
@@ -60,12 +62,14 @@ func (s *Vm) Snapshot() *Vm {
 	return s
 }
 func (s *Vm) restore() {
+	//inspect(s)
 	if !s.regEqual() {
 		s.G.Registry = s.regCopy(s.reg)
 	}
 	if !s.TabEqualTo(s.G.Global, s.env) {
 		s.G.Global = s.TabCopyNew(s.env)
 	}
+	//inspect(s)
 	s.G.MainThread = nil
 	s.G.CurrentThread = nil
 	s.Parent = nil
@@ -128,7 +132,7 @@ func (s *Vm) TabChildEqualTo(t1 *LTable, t2 *LTable, keys ...string) (r bool) {
 }
 func (s *Vm) TabCopyNew(f *LTable) *LTable {
 	t := s.NewTable()
-	f.ForEach(t.RawSetH)
+	f.ForEach(t.RawSet)
 	return t
 }
 func (s *Vm) TabCopyChildNew(f *LTable, keys ...string) *LTable {
@@ -146,6 +150,44 @@ func (s *Vm) TabCopyChildNew(f *LTable, keys ...string) *LTable {
 
 	}
 	return t
+}
+func inspect(s *Vm) {
+	loaders, _ := s.GetField(s.Get(RegistryIndex), "_LOADERS").(*LTable)
+	pretty(loaders, 2)
+}
+func pretty(v LValue, d int) {
+	h := make(map[LValue]struct{})
+	prettyi(v, 0, d, h)
+}
+
+var set = struct{}{}
+
+func prettyi(v LValue, i int, d int, h map[LValue]struct{}) {
+	if i > d {
+		return
+	}
+	ind := strings.Repeat(" ", i)
+	if _, ok := h[v]; ok {
+		fmt.Print(v)
+	}
+	h[v] = set
+	if v.Type() == LTTable {
+		fmt.Println("{")
+		v.(*LTable).ForEach(func(k LValue, v LValue) {
+			fmt.Print(ind)
+			if _, ok := h[k]; ok {
+				fmt.Print(k)
+			} else {
+				prettyi(k, i+1, d, h)
+			}
+			print("=")
+			prettyi(v, i+1, d, h)
+			fmt.Println()
+		})
+		fmt.Println(ind, "}")
+	} else {
+		fmt.Print(v)
+	}
 }
 
 // Reset reset Env
@@ -221,7 +263,7 @@ type VmPool struct {
 
 // CreatePoolWith create pool with user defined constructor
 //
-//	GluMod will auto registered
+//	BaseMod will auto registered
 func CreatePoolWith(ctor func() *LState) *VmPool {
 	return &VmPool{saved: make([]*Vm, 0, InitialSize), ctor: ctor}
 }
@@ -244,7 +286,7 @@ func (pl *VmPool) Get() *Vm {
 func (pl *VmPool) new() *Vm {
 	if pl.ctor != nil {
 		l := pl.ctor()
-		GluMod.PreLoad(l)
+		BaseMod.PreLoad(l)
 		return (&Vm{LState: l}).Snapshot()
 	}
 	L := NewState(Option)
@@ -286,7 +328,7 @@ func (pl *VmPool) Shutdown() {
 
 // endregion
 func configurer(l *LState) {
-	GluMod.PreLoad(l)
+	BaseMod.PreLoad(l)
 	if Auto {
 		for _, module := range registry {
 			module.PreLoad(l)

@@ -13,14 +13,14 @@ func TestHttpHelp(t *testing.T) {
 	err := s.DoString(`
 		local http=require('http')
 		local json=require('json')
-		print(http.Help('?'))
-		print(http.Server.Help('?'))
-		for word in string.gmatch(http.Server.Help(), '([^,]+)') do
-			print(http.Server.Help(word))
+		print(http.help('?'))
+		print(http.Server.help('?'))
+		for word in string.gmatch(http.Server.help(), '([^,]+)') do
+			print(http.Server.help(word))
 		end
-		print(http.Ctx.Help('?'))
-		for word in string.gmatch(http.Ctx.Help(), '([^,]+)') do
-			print(http.Ctx.Help(word))
+		print(http.Ctx.help('?'))
+		for word in string.gmatch(http.Ctx.help(), '([^,]+)') do
+			print(http.Ctx.help(word))
 		end
 	`)
 	if err != nil {

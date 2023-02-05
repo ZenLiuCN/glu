@@ -8,9 +8,9 @@ import (
 
 func TestGluModule(t *testing.T) {
 	err := ExecuteCode(`
-		print(Help())
-		print(Help('?'))
-		print(Help('chunk'))
+		print(help())
+		print(help('?'))
+		print(help('chunk'))
 		local ch,err=chunk([[
 			local c=...
 			print(c)
@@ -19,7 +19,7 @@ func TestGluModule(t *testing.T) {
 		if err~=nil then error(err,1) end
 		return ch
 	`, 0, 1, nil, func(s *Vm) error {
-		c := GluMod.CheckChunk(s.LState, 1)
+		c := BaseMod.CheckChunk(s.LState, 1)
 		return ExecuteChunk(c, 1, 1, OpPush(LString("1")), func(s *Vm) error {
 			if s.CheckString(1) != "1" {
 				return fmt.Errorf("error: %s", s.CheckString(1))
