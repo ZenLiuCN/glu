@@ -8,9 +8,9 @@ import (
 
 func TestGluModule(t *testing.T) {
 	err := ExecuteCode(`
-		print(help())
-		print(help('?'))
-		print(help('chunk'))
+		print(HelpCache())
+		print(HelpCache('?'))
+		print(HelpCache('chunk'))
 		local ch,err=chunk([[
 			local c=...
 			print(c)

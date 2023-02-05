@@ -1,5 +1,5 @@
 // Package glu  support yuin/gopher-lua with easy modular definition and other enchantments.
-// glu.Modular and gua.BaseType will inject mod.Help(name string?) method to output help information.
+// glu.Modular and gua.BaseType will inject mod.Help(name string?) method to output HelpCache information.
 // glu.Get: Pool function to get a lua.LState.
 // glu.Put: Pool function to return a lua.LState.
 // glu.registry: shared module registry.
@@ -18,7 +18,7 @@ type (
 		//
 		// @name function name, must match lua limitation
 		//
-		// @help help string, if empty will generate just Module.Function as help
+		// @HelpCache HelpCache string, if empty will generate just Module.Function as HelpCache
 		//
 		// @fn the LGFunction
 		AddFunc(name string, help string, fn LGFunction) Module
@@ -41,16 +41,16 @@ type (
 		Help string
 		Func LGFunction
 	}
-	//Mod define a Mod only contains Functions and value fields,maybe with submodules
+	//Mod define a Mod only contains Functions and value fields,maybe with Submodules
 	Mod struct {
 		Name       string               //Name of Modular
 		Top        bool                 //is top level
 		Help       string               //Help information of this Modular
 		functions  map[string]funcInfo  //registered functions
 		fields     map[string]fieldInfo //registered fields
-		submodules []Modular            //registered sub modules
+		Submodules []Modular            //registered sub modules
 		prepared   bool                 //compute helper and other things, should just do once
-		help       map[string]string    //inner helps
+		HelpCache  map[string]string    //exported helps for better use
 	}
 )
 
@@ -73,7 +73,7 @@ func (m *Mod) prepare() {
 		return
 	}
 	help := make(map[string]string)
-	mh := new(strings.Builder) //mod help builder
+	mh := new(strings.Builder) //mod HelpCache builder
 	if m.Help != "" {
 		mh.WriteString(m.Help)
 		mh.WriteRune('\n')
@@ -83,12 +83,12 @@ func (m *Mod) prepare() {
 	}
 	helpFuncReg(m.functions, help, mh, m.Name)
 	helpFieldReg(m.fields, help, mh, m.Name)
-	helpSubModReg(m.submodules, help, mh, m.Name)
+	helpSubModReg(m.Submodules, help, mh, m.Name)
 
 	if mh.Len() > 0 {
 		help[HelpKey] = mh.String()
 	}
-	m.help = help
+	m.HelpCache = help
 	m.prepared = true
 }
 func (m *Mod) PreLoad(l *LState) {
@@ -109,13 +109,13 @@ func (m *Mod) PreLoad(l *LState) {
 				l.SetField(mod, key, value.Value)
 			}
 		}
-		if len(m.submodules) > 0 {
-			for _, t := range m.submodules {
+		if len(m.Submodules) > 0 {
+			for _, t := range m.Submodules {
 				t.PreloadSubModule(l, mod)
 			}
 		}
-		if len(m.help) > 0 {
-			fn[HelpFunc] = helpFn(m.help)
+		if len(m.HelpCache) > 0 {
+			fn[HelpFunc] = helpFn(m.HelpCache)
 		}
 		if len(fn) > 0 {
 			l.SetFuncs(mod, fn)
@@ -143,13 +143,13 @@ func (m *Mod) PreloadSubModule(l *LState, t *LTable) {
 
 		}
 	}
-	if len(m.submodules) > 0 {
-		for _, s := range m.submodules {
+	if len(m.Submodules) > 0 {
+		for _, s := range m.Submodules {
 			s.PreloadSubModule(l, mod)
 		}
 	}
-	if len(m.help) > 0 {
-		fn[HelpFunc] = helpFn(m.help)
+	if len(m.HelpCache) > 0 {
+		fn[HelpFunc] = helpFn(m.HelpCache)
 	}
 	if len(fn) > 0 {
 		l.SetFuncs(mod, fn)
@@ -161,7 +161,7 @@ func (m *Mod) PreloadSubModule(l *LState, t *LTable) {
 //
 // @name function name, must match lua limitation
 //
-// @help help string, if empty will not generate into help
+// @HelpCache HelpCache string, if empty will not generate into HelpCache
 //
 // @fn the LGFunction
 func (m *Mod) AddFunc(name string, help string, fn LGFunction) Module {
@@ -191,7 +191,7 @@ func (m *Mod) SafeFun(name string, help string, fn LGFunction) Module {
 //
 // @name the field name
 //
-// @help help string, if empty will not generate into help
+// @HelpCache HelpCache string, if empty will not generate into HelpCache
 //
 // @value the field value
 func (m *Mod) AddField(name string, help string, value LValue) Module {
@@ -211,7 +211,7 @@ func (m *Mod) AddModule(mod Modular) Module {
 	if mod.TopLevel() {
 		panic(ErrIsTop)
 	}
-	m.submodules = append(m.submodules, mod)
+	m.Submodules = append(m.Submodules, mod)
 	return m
 
 }

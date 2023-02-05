@@ -17,19 +17,19 @@ type Modular interface {
 	PreloadSubModule(l *lua.LState, t *lua.LTable)
 	//GetName the unique name (if is a Top Level Modular)
 	GetName() string
-	//GetHelp Modular help info
+	//GetHelp Modular HelpCache info
 	GetHelp() string
 }
 
 var (
-	//HelpKey the module help key
+	//HelpKey the module HelpCache key
 	HelpKey = "?"
-	//HelpFunc the help function name
-	HelpFunc = "help"
-	//HelpPrompt the prompt for no value supply for help
-	HelpPrompt = "show help with those key word: "
+	//HelpFunc the HelpCache function name
+	HelpFunc = "HelpCache"
+	//HelpPrompt the prompt for no value supply for HelpCache
+	HelpPrompt = "show HelpCache with those key word: "
 	HelpChunk  = `chunk(code,name string)(Chunk?,string?) ==> pre compile string into bytecode`
-	HelpHelp   = HelpFunc + `(topic string?)string? => fetch help of topic,'?' show topics,without topic show loadable modules`
+	HelpHelp   = HelpFunc + `(topic string?)string? => fetch HelpCache of topic,'?' show topics,without topic show loadable modules`
 	HelpTopic  = `?,chunk`
 )
 
@@ -39,6 +39,7 @@ func helpFuncReg(fun map[string]funcInfo, helps map[string]string, mh *strings.B
 			if info.Help != "" {
 				helps[s] = fmt.Sprintf("%s.%s %s", mod, s, info.Help)
 				mh.WriteString(fmt.Sprintf("%s.%s %s\n", mod, s, info.Help))
+				info.Help = ""
 			} else {
 				mh.WriteString(fmt.Sprintf("%s.%s\n", mod, s))
 			}
@@ -51,6 +52,7 @@ func helpFieldReg(fun map[string]fieldInfo, helps map[string]string, mh *strings
 			if info.Help != "" {
 				helps[s] = fmt.Sprintf("%s.%s %s", mod, s, info.Help)
 				mh.WriteString(fmt.Sprintf("%s.%s %s\n", mod, s, info.Help))
+				info.Help = ""
 			} else {
 				mh.WriteString(fmt.Sprintf("%s.%s\n", mod, s))
 			}
@@ -63,6 +65,7 @@ func helpMethodReg(fun map[string]funcInfo, helps map[string]string, mh *strings
 			if info.Help != "" {
 				helps[s] = fmt.Sprintf("%s:%s %s", mod, s, info.Help)
 				mh.WriteString(fmt.Sprintf("%s:%s %s\n", mod, s, info.Help))
+				info.Help = ""
 			} else {
 				mh.WriteString(fmt.Sprintf("%s:%s\n", mod, s))
 			}
@@ -145,6 +148,7 @@ func helpOperatorReg(operators map[Operate]funcInfo, hasMethods bool, helps map[
 			if info.Help != "" {
 				helps[name] = fmt.Sprintf("%s::%s %s\n", mod, sym, info.Help)
 				mh.WriteString(fmt.Sprintf("%s::%s %s\n", mod, sym, info.Help))
+				info.Help = ""
 			} else {
 				mh.WriteString(fmt.Sprintf("%s::%s\n", mod, sym))
 			}

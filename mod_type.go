@@ -109,7 +109,7 @@ func (m *BaseType) prepare() {
 		return
 	}
 	help := make(map[string]string)
-	mh := new(strings.Builder) //mod help builder
+	mh := new(strings.Builder) //mod HelpCache builder
 	if m.Help != "" {
 		mh.WriteString(m.Help)
 		mh.WriteRune('\n')
@@ -121,13 +121,13 @@ func (m *BaseType) prepare() {
 	helpFieldReg(m.fields, help, mh, m.Name)
 	helpMethodReg(m.methods, help, mh, m.Name)
 	helpOperatorReg(m.operators, len(m.methods) > 0, help, mh, m.Name)
-	helpSubModReg(m.submodules, help, mh, m.Name)
+	helpSubModReg(m.Submodules, help, mh, m.Name)
 	helpCtorReg(m.constructor, m.HelpCtor, help, mh, m.Name)
 
 	if mh.Len() > 0 {
 		help[HelpKey] = mh.String()
 	}
-	m.help = help
+	m.HelpCache = help
 	m.prepared = true
 
 }
@@ -136,7 +136,7 @@ func (m *BaseType) prepare() {
 //
 // @name function name, must match lua limitation
 //
-// @help help string, if empty will not generate into help
+// @HelpCache HelpCache string, if empty will not generate into HelpCache
 //
 // @fn the LGFunction
 func (m *BaseType) AddFunc(name string, help string, fn LGFunction) Type {
@@ -156,7 +156,7 @@ func (m *BaseType) SafeFun(name string, help string, fn LGFunction) Type {
 //
 // @name the field name
 //
-// @help help string, if empty will not generate into help
+// @HelpCache HelpCache string, if empty will not generate into HelpCache
 //
 // @value the field value
 func (m *BaseType) AddField(name string, help string, value LValue) Type {
@@ -208,8 +208,8 @@ func (m *BaseType) getOrBuildMeta(l *LState) *LTable {
 			l.SetField(mt, key, value.Value)
 		}
 	}
-	if len(m.submodules) > 0 {
-		for _, t := range m.submodules {
+	if len(m.Submodules) > 0 {
+		for _, t := range m.Submodules {
 			t.PreloadSubModule(l, mt)
 		}
 	}
@@ -268,8 +268,8 @@ func (m *BaseType) getOrBuildMeta(l *LState) *LTable {
 		}
 
 	}
-	if len(m.help) > 0 {
-		fn[HelpFunc] = helpFn(m.help)
+	if len(m.HelpCache) > 0 {
+		fn[HelpFunc] = helpFn(m.HelpCache)
 	}
 	if len(fn) > 0 {
 		l.SetFuncs(mt, fn)
