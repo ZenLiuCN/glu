@@ -123,9 +123,19 @@ func (m *BaseType) prepare() {
 	helpOperatorReg(m.operators, len(m.methods) > 0, help, mh, m.Name)
 	helpSubModReg(m.Submodules, help, mh, m.Name)
 	helpCtorReg(m.constructor, m.HelpCtor, help, mh, m.Name)
-
 	if mh.Len() > 0 {
 		help[HelpKey] = mh.String()
+	}
+	//prepare sub modules?
+	if EagerHelpPrepare && len(m.Submodules) > 0 {
+		for _, sub := range m.Submodules {
+			switch sub.(type) {
+			case *Mod:
+				sub.(*Mod).prepare()
+			case *BaseType:
+				sub.(*BaseType).prepare()
+			}
+		}
 	}
 	m.HelpCache = help
 	m.prepared = true

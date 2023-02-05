@@ -27,10 +27,11 @@ var (
 	//HelpFunc the help function name
 	HelpFunc = "help"
 	//HelpPrompt the prompt for no value supply for HelpCache
-	HelpPrompt = "show HelpCache with those key word: "
-	HelpChunk  = `chunk(code,name string)(Chunk?,string?) ==> pre compile string into bytecode`
-	HelpHelp   = HelpFunc + `(topic string?)string? => fetch HelpCache of topic,'?' show topics,without topic show loadable modules`
-	HelpTopic  = `?,chunk`
+	HelpPrompt       = "show HelpCache with those key word: "
+	HelpChunk        = `chunk(code,name string)(Chunk?,string?) ==> pre compile string into bytecode`
+	HelpHelp         = HelpFunc + `(topic string?)string? => fetch HelpCache of topic,'?' show topics,without topic show loadable modules`
+	HelpTopic        = `?,chunk`
+	EagerHelpPrepare = false
 )
 
 func helpFuncReg(fun map[string]funcInfo, helps map[string]string, mh *strings.Builder, mod string) {

@@ -60,7 +60,7 @@ func (c glu) PreLoad(l *LState) {
 		t := s.CheckString(1)
 		switch t {
 		case HelpKey:
-			s.Push(LString(HelpHelp))
+			s.Push(LString(HelpTopic))
 		case "chunk":
 			s.Push(LString(HelpChunk))
 		default:
@@ -68,8 +68,4 @@ func (c glu) PreLoad(l *LState) {
 		}
 		return 1
 	})))
-}
-
-func (c glu) PreloadSubModule(l *LState, t *LTable) {
-	panic("implement me")
 }

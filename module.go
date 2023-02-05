@@ -88,6 +88,16 @@ func (m *Mod) prepare() {
 	if mh.Len() > 0 {
 		help[HelpKey] = mh.String()
 	}
+	if EagerHelpPrepare && len(m.Submodules) > 0 {
+		for _, sub := range m.Submodules {
+			switch sub.(type) {
+			case *Mod:
+				sub.(*Mod).prepare()
+			case *BaseType:
+				sub.(*BaseType).prepare()
+			}
+		}
+	}
 	m.HelpCache = help
 	m.prepared = true
 }
