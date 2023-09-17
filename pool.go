@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	. "github.com/yuin/gopher-lua"
+	"reflect"
 	"strings"
 	"sync"
+	"unsafe"
 )
 
 var (
@@ -49,6 +51,20 @@ type (
 		reg *LTable
 	}
 )
+
+func getField(source interface{}, fieldName string) reflect.Value {
+	v := reflect.ValueOf(source).Elem().FieldByName(fieldName)
+	return reflect.NewAt(v.Type(), unsafe.Pointer(v.UnsafeAddr())).Elem()
+}
+func setField(source interface{}, fieldName string, fieldVal interface{}) (err error) {
+	v := getField(source, fieldName)
+	rv := reflect.ValueOf(fieldVal)
+	if v.Kind() != rv.Kind() {
+		return fmt.Errorf("invalid kind: expected kind %v, got kind: %v", v.Kind(), rv.Kind())
+	}
+	v.Set(rv)
+	return nil
+}
 
 // Polluted check if the Env is polluted
 func (s *Vm) Polluted() (r bool) {
