@@ -2,7 +2,7 @@ package http
 
 import (
 	"github.com/Jeffail/gabs/v2"
-	"github.com/ZenLiuCN/glu"
+	"github.com/ZenLiuCN/glu/v1"
 	"net/http"
 	"testing"
 	"time"

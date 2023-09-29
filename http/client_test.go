@@ -1,7 +1,7 @@
 package http
 
 import (
-	"github.com/ZenLiuCN/glu"
+	"github.com/ZenLiuCN/glu/v1"
 	"net/http"
 	"net/url"
 	"testing"
