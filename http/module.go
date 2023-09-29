@@ -14,10 +14,10 @@ import (
 )
 
 var (
-	CtxType    Type
-	ServerType Type
-	ResType    Type
-	ClientType Type
+	CtxType    Type[*Ctx]
+	ServerType Type[*Server]
+	ResType    Type[*http.Response]
+	ClientType Type[*Client]
 	HttpModule Module
 	ServerPool map[int64]*Server
 	ClientPool map[int64]*Client
@@ -39,42 +39,29 @@ server:start(false)
 while (true) do	end
 `, true)
 	//region Ctx
-	chkCtx := func(s *LState) *Ctx {
-		ud := s.CheckUserData(1)
-		if v, ok := ud.Value.(*Ctx); ok {
-			return v
-		}
-		s.ArgError(1, "http.Ctx expected")
-		return nil
-	}
-	CtxType = NewType("Ctx", `http request context`, false, "", nil).
-		SafeMethod("vars", `Ctx:vars(name string)string ==> fetch path variable`,
-			func(s *LState) int {
-				v := chkCtx(s)
-				s.Push(LString(v.Vars(s.CheckString(2))))
-				return 1
-			}).
-		SafeMethod("header", `Ctx:header(name string)string ==> fetch request header`,
-			func(s *LState) int {
-				v := chkCtx(s)
+
+	CtxType = NewTypeCast(func(a any) (v *Ctx, ok bool) { v, ok = a.(*Ctx); return }, "Ctx", `http request context`, false, "", nil).
+		AddMethodCast("vars", `Ctx:vars(name string)string ==> fetch path variable`, func(s *LState, v *Ctx) int {
+			s.Push(LString(v.Vars(s.CheckString(2))))
+			return 1
+		}).
+		AddMethodCast("header", `Ctx:header(name string)string ==> fetch request header`,
+			func(s *LState, v *Ctx) int {
 				s.Push(LString(v.Header(s.CheckString(2))))
 				return 1
 			}).
-		SafeMethod("query", `Ctx:query(name string)string ==> fetch request query parameter`,
-			func(s *LState) int {
-				v := chkCtx(s)
+		AddMethodCast("query", `Ctx:query(name string)string ==> fetch request query parameter`,
+			func(s *LState, v *Ctx) int {
 				s.Push(LString(v.Query(s.CheckString(2))))
 				return 1
 			}).
-		SafeMethod("method", `Ctx:method()string ==> fetch request method`,
-			func(s *LState) int {
-				v := chkCtx(s)
+		AddMethodCast("method", `Ctx:method()string ==> fetch request method`,
+			func(s *LState, v *Ctx) int {
 				s.Push(LString(v.Method()))
 				return 1
 			}).
-		SafeMethod("body", `Ctx:body()json.Json ==> fetch request body`,
-			func(s *LState) int {
-				v := chkCtx(s)
+		AddMethodCast("body", `Ctx:body()json.Json ==> fetch request body`,
+			func(s *LState, v *Ctx) int {
 				body, err := v.Body()
 				if err != nil {
 					s.RaiseError("fetch body error %s", err)
@@ -82,71 +69,60 @@ while (true) do	end
 				}
 				return json.JsonType.New(s, body)
 			}).
-		SafeMethod("setHeader", `Ctx:setHeader(key,value string)Ctx ==> chain method set output header`,
-			func(s *LState) int {
-				ud := s.ToUserData(1)
-				v := chkCtx(s)
-				s.CheckTypes(2, LTString)
-				s.CheckTypes(3, LTString)
-				v.SetHeader(s.ToString(2), s.ToString(3))
-				s.Push(ud)
-				return 1
-			}).
-		SafeMethod("setStatus", `Ctx:setStatus(code int) ==> send http status,this will close process`,
-			func(s *LState) int {
-				v := chkCtx(s)
-				s.CheckTypes(2, LTNumber)
-				v.SetStatus(s.ToInt(2))
+		AddMethodUserData("setHeader", `Ctx:setHeader(key,value string)Ctx ==> chain method set output header`, func(s *LState, u *LUserData) int {
+			s.CheckTypes(2, LTString)
+			s.CheckTypes(3, LTString)
+			v, ok := CtxType.CastUserData(u, s)
+			if !ok {
 				return 0
-			}).
-		SafeMethod("sendJson", `Ctx:sendJson(json json.Json) ==> send json body,this will close process`,
-			func(s *LState) int {
-				v := chkCtx(s)
-				g := json.JsonType.CastVar(s, 2)
-				v.SendJson(g.(*gabs.Container))
+			}
+			v.SetHeader(s.ToString(2), s.ToString(3))
+			s.Push(u)
+			return 1
+		}).
+		AddMethodCast("setStatus", `Ctx:setStatus(code int) ==> send http status,this will close process`, func(s *LState, v *Ctx) int {
+
+			s.CheckTypes(2, LTNumber)
+			v.SetStatus(s.ToInt(2))
+			return 0
+		}).
+		AddMethodCast("sendJson", `Ctx:sendJson(json json.Json) ==> send json body,this will close process`, func(s *LState, v *Ctx) int {
+			g, ok := json.JsonType.CastVar(s, 2)
+			if !ok {
 				return 0
-			}).
-		SafeMethod("sendString", `Ctx:sendString(text string) ==> send text body,this will close process`,
-			func(s *LState) int {
-				v := chkCtx(s)
-				g := s.CheckString(2)
-				v.SendString(g)
+			}
+			v.SendJson(g)
+			return 0
+		}).
+		AddMethodCast("sendString", `Ctx:sendString(text string) ==> send text body,this will close process`, func(s *LState, v *Ctx) int {
+			g := s.CheckString(2)
+			v.SendString(g)
+			return 0
+		}).
+		AddMethodCast("sendFile", `Ctx:sendFile(path string) ==> send file,this will close process`, func(s *LState, v *Ctx) int {
+			s.CheckTypes(2, LTString)
+			err := v.SendFile(s.ToString(2))
+			if err != nil {
+				s.RaiseError("send file %s", err)
 				return 0
-			}).
-		SafeMethod("sendFile", `Ctx:sendFile(path string) ==> send file,this will close process`,
-			func(s *LState) int {
-				v := chkCtx(s)
-				s.CheckTypes(2, LTString)
-				err := v.SendFile(s.ToString(2))
-				if err != nil {
-					s.RaiseError("send file %s", err)
-					return 0
-				}
-				return 0
-			})
+			}
+			return 0
+		})
 	//endregion
 	//region Server
-	chkServer := func(s *LState) *Server {
-		ud := s.CheckUserData(1)
-		if v, ok := ud.Value.(*Server); ok {
-			return v
-		}
-		s.ArgError(1, "http.Server expected")
-		return nil
-	}
-	ServerType = NewType("Server", `Http Server`, false, `(addr string)`,
-		func(s *LState) interface{} {
+
+	ServerType = NewTypeCast(func(a any) (v *Server, ok bool) { v, ok = a.(*Server); return }, "Server", `Http Server`, false, `(addr string)`,
+		func(s *LState) (*Server, bool) {
 			s.CheckType(1, LTString)
 			srv := NewServer(s.ToString(1), func(s string) {
 				//TODO
 				log.Println(s)
 			})
 			ServerPool[srv.ID] = srv
-			return srv
+			return srv, true
 		}).
-		SafeMethod("stop", `(seconds int) => stop server graceful`,
-			func(s *LState) int {
-				v := chkServer(s)
+		AddMethodCast("stop", `(seconds int) => stop server graceful`,
+			func(s *LState, v *Server) int {
 				s.CheckType(2, LTNumber)
 				err, _ := v.Stop(time.Second * time.Duration(s.ToInt(2)))
 				if err != nil {
@@ -154,9 +130,8 @@ while (true) do	end
 				}
 				return 0
 			}).
-		SafeMethod("running", `()bool => check server is running`,
-			func(s *LState) int {
-				v := chkServer(s)
+		AddMethodCast("running", `()bool => check server is running`,
+			func(s *LState, v *Server) int {
 				if v.Running() {
 					s.Push(LTrue)
 				} else {
@@ -164,7 +139,7 @@ while (true) do	end
 				}
 				return 1
 			}).
-		SafeMethod("start", `(
+		AddMethodCast("start", `(
     cors bool,                          ==> enable cors or not,default false.
 	allowHeader    []string?,           ==> cors config for header allowed.
 	allowedMethods []string?,           ==> cors config for methods allowed.
@@ -173,8 +148,7 @@ while (true) do	end
 	maxAge int?,                        ==> cors config for maxAge ,maximum 600 seconds.
 	allowCredentials bool?,             ==> cors config for allowCredentials.
 )                                       ==> start server,should only call once.`,
-			func(s *LState) int {
-				v := chkServer(s)
+			func(s *LState, v *Server) int {
 				c := s.CheckBool(2)
 				if !c {
 					v.Start(false, nil, nil, nil, nil, 0, 0)
@@ -204,10 +178,9 @@ while (true) do	end
 				}
 				return 0
 			}).
-		SafeMethod("route", `(path string,  ==> code should be string code slice with function handle http.Ctx
+		AddMethodCast("route", `(path string,  ==> code should be string code slice with function handle http.Ctx
 code string) ==> register handler without method limit.`,
-			func(s *LState) int {
-				v := chkServer(s)
+			func(s *LState, v *Server) int {
 				route := s.CheckString(2)
 				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
@@ -218,9 +191,8 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		SafeMethod("get", `(path string, handler Chunk) ==> register handler limit with GET.`,
-			func(s *LState) int {
-				v := chkServer(s)
+		AddMethodCast("get", `(path string, handler Chunk) ==> register handler limit with GET.`,
+			func(s *LState, v *Server) int {
 				route := s.CheckString(2)
 				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
@@ -231,9 +203,8 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		SafeMethod("post", `(path string, handler Chunk) ==> register handler limit with POST.`,
-			func(s *LState) int {
-				v := chkServer(s)
+		AddMethodCast("post", `(path string, handler Chunk) ==> register handler limit with POST.`,
+			func(s *LState, v *Server) int {
 				route := s.CheckString(2)
 				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
@@ -244,9 +215,8 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		SafeMethod("put", `(path string, handler Chunk) ==> register handler limit with POST.`,
-			func(s *LState) int {
-				v := chkServer(s)
+		AddMethodCast("put", `(path string, handler Chunk) ==> register handler limit with POST.`,
+			func(s *LState, v *Server) int {
 				route := s.CheckString(2)
 				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
@@ -257,9 +227,8 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		SafeMethod("head", `(path string,handler Chunk) ==> register handler limit with HEAD.`,
-			func(s *LState) int {
-				v := chkServer(s)
+		AddMethodCast("head", `(path string,handler Chunk) ==> register handler limit with HEAD.`,
+			func(s *LState, v *Server) int {
 				route := s.CheckString(2)
 				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
@@ -270,9 +239,8 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		SafeMethod("patch", `(path string,handler Chunk) ==> register handler limit with PATCH.`,
-			func(s *LState) int {
-				v := chkServer(s)
+		AddMethodCast("patch", `(path string,handler Chunk) ==> register handler limit with PATCH.`,
+			func(s *LState, v *Server) int {
 				route := s.CheckString(2)
 				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
@@ -283,9 +251,8 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		SafeMethod("delete", `(path string,handler Chunk) ==> register handler limit with DELETE.`,
-			func(s *LState) int {
-				v := chkServer(s)
+		AddMethodCast("delete", `(path string,handler Chunk) ==> register handler limit with DELETE.`,
+			func(s *LState, v *Server) int {
 				route := s.CheckString(2)
 				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
@@ -296,9 +263,8 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		SafeMethod("connect", `(path string,handler Chunk) ==> register handler limit with CONNECT.`,
-			func(s *LState) int {
-				v := chkServer(s)
+		AddMethodCast("connect", `(path string,handler Chunk) ==> register handler limit with CONNECT.`,
+			func(s *LState, v *Server) int {
 				route := s.CheckString(2)
 				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
@@ -309,9 +275,8 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		SafeMethod("options", `(path string,handler Chunk) ==> register handler limit with OPTIONS.should not use if with cors enable`,
-			func(s *LState) int {
-				v := chkServer(s)
+		AddMethodCast("options", `(path string,handler Chunk) ==> register handler limit with OPTIONS.should not use if with cors enable`,
+			func(s *LState, v *Server) int {
 				route := s.CheckString(2)
 				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
@@ -322,9 +287,8 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		SafeMethod("trace", `(path string,handler Chunk) ==> register handler limit with TRACE.`,
-			func(s *LState) int {
-				v := chkServer(s)
+		AddMethodCast("trace", `(path string,handler Chunk) ==> register handler limit with TRACE.`,
+			func(s *LState, v *Server) int {
 				route := s.CheckString(2)
 				chunk := BaseMod.CheckChunk(s, 3)
 				if chunk == nil {
@@ -335,18 +299,16 @@ code string) ==> register handler without method limit.`,
 				})
 				return 0
 			}).
-		SafeMethod("files", `(path ,prefix, dir string) ==> register path to service with dir`,
-			func(s *LState) int {
-				v := chkServer(s)
+		AddMethodCast("files", `(path ,prefix, dir string) ==> register path to service with dir`,
+			func(s *LState, v *Server) int {
 				route := s.CheckString(2)
 				pfx := s.CheckString(3)
 				file := s.CheckString(4)
 				v.File(route, pfx, file)
 				return 0
 			}).
-		SafeMethod("release", `release() ==> release this server`,
-			func(s *LState) int {
-				v := chkServer(s)
+		AddMethodCast("release", `release() ==> release this server`,
+			func(s *LState, v *Server) int {
 				if v.Running() {
 					_, _ = v.Stop(time.Second)
 				}
@@ -382,36 +344,25 @@ code string) ==> register handler without method limit.`,
 	//endregion
 
 	//region Res
-	chkRes := func(s *LState) *http.Response {
-		ud := s.CheckUserData(1)
-		if v, ok := ud.Value.(*http.Response); ok {
-			return v
-		}
-		s.ArgError(1, "http.Res expected")
-		return nil
-	}
-	ResType = NewType("Res", ``, false, ``, nil).
-		SafeMethod("statusCode", `()int`,
-			func(s *LState) int {
-				c := chkRes(s)
+
+	ResType = NewTypeCast(func(a any) (v *http.Response, ok bool) { v, ok = a.(*http.Response); return }, "Res", ``, false, ``, nil).
+		AddMethodCast("statusCode", `()int`,
+			func(s *LState, c *http.Response) int {
 				s.Push(LNumber(c.StatusCode))
 				return 1
 			}).
-		SafeMethod("status", `()string`,
-			func(s *LState) int {
-				c := chkRes(s)
+		AddMethodCast("status", `()string`,
+			func(s *LState, c *http.Response) int {
 				s.Push(LString(c.Status))
 				return 1
 			}).
-		SafeMethod("size", `()int ==> content size in bytes`,
-			func(s *LState) int {
-				c := chkRes(s)
+		AddMethodCast("size", `()int ==> content size in bytes`,
+			func(s *LState, c *http.Response) int {
 				s.Push(LNumber(c.ContentLength))
 				return 1
 			}).
-		SafeMethod("header", `()map[string]string`,
-			func(s *LState) int {
-				c := chkRes(s)
+		AddMethodCast("header", `()map[string]string`,
+			func(s *LState, c *http.Response) int {
 				t := s.NewTable()
 				for k, v := range c.Header {
 					t.RawSetString(k, LString(strings.Join(v, ",")))
@@ -419,11 +370,10 @@ code string) ==> register handler without method limit.`,
 				s.Push(t)
 				return 1
 			}).
-		SafeMethod("body", `()string ==> read body as string,body should only read once.`,
-			func(s *LState) int {
-				c := chkRes(s)
-				defer c.Body.Close()
-				buf, err := ioutil.ReadAll(c.Body)
+		AddMethodCast("body", `()string ==> read body as string,body should only read once.`,
+			func(s *LState, v *http.Response) int {
+				defer v.Body.Close()
+				buf, err := ioutil.ReadAll(v.Body)
 				if err != nil {
 					s.RaiseError("read body %s", err)
 					return 0
@@ -431,9 +381,8 @@ code string) ==> register handler without method limit.`,
 				s.Push(LString(buf))
 				return 1
 			}).
-		SafeMethod("bodyJson", `()(json.Json?,string?) ==> read body as Json,body should only read once.`,
-			func(s *LState) int {
-				c := chkRes(s)
+		AddMethodCast("bodyJson", `()(json.Json?,string?) ==> read body as Json,body should only read once.`,
+			func(s *LState, c *http.Response) int {
 				defer c.Body.Close()
 				buf, err := ioutil.ReadAll(c.Body)
 				if err != nil {
@@ -454,23 +403,15 @@ code string) ==> register handler without method limit.`,
 	//endregion
 
 	//region Client
-	chkClient := func(s *LState) *Client {
-		ud := s.CheckUserData(1)
-		if v, ok := ud.Value.(*Client); ok {
-			return v
-		}
-		s.ArgError(1, "http.Client expected")
-		return nil
-	}
-	ClientType = NewType("Client", `http client `, false, `(timeoutSeconds int)Client`,
-		func(s *LState) interface{} {
+
+	ClientType = NewTypeCast(func(a any) (v *Client, ok bool) { v, ok = a.(*Client); return }, "Client", `http client `, false, `(timeoutSeconds int)Client`,
+		func(s *LState) (*Client, bool) {
 			c := NewClient(time.Duration(s.CheckInt(1)) * time.Second)
 			ClientPool[c.ID] = c
-			return c
+			return c, true
 		}).
-		SafeMethod("get", `(url string)(Res?,error?) ==>perform GET request`,
-			func(s *LState) int {
-				c := chkClient(s)
+		AddMethodCast("get", `(url string)(Res?,error?) ==>perform GET request`,
+			func(s *LState, c *Client) int {
 				res, err := c.Get(s.CheckString(2))
 				if err != nil {
 					s.Push(LNil)
@@ -481,9 +422,8 @@ code string) ==> register handler without method limit.`,
 				}
 				return 2
 			}).
-		SafeMethod("post", `(url,contentType, data string)(Res?,error?) ==>perform POST request`,
-			func(s *LState) int {
-				c := chkClient(s)
+		AddMethodCast("post", `(url,contentType, data string)(Res?,error?) ==>perform POST request`,
+			func(s *LState, c *Client) int {
 				res, err := c.Post(s.CheckString(2), s.CheckString(3), s.CheckString(4))
 				if err != nil {
 					s.Push(LNil)
@@ -494,9 +434,8 @@ code string) ==> register handler without method limit.`,
 				}
 				return 2
 			}).
-		SafeMethod("head", `(url string)(Res?,error?) ==>perform HEAD request`,
-			func(s *LState) int {
-				c := chkClient(s)
+		AddMethodCast("head", `(url string)(Res?,error?) ==>perform HEAD request`,
+			func(s *LState, c *Client) int {
 				res, err := c.Head(s.CheckString(2))
 				if err != nil {
 					s.Push(LNil)
@@ -507,9 +446,8 @@ code string) ==> register handler without method limit.`,
 				}
 				return 2
 			}).
-		SafeMethod("form", `(url string, form map[string][]string)(Res?,error?) ==>perform POST form request`,
-			func(s *LState) int {
-				c := chkClient(s)
+		AddMethodCast("form", `(url string, form map[string][]string)(Res?,error?) ==>perform POST form request`,
+			func(s *LState, c *Client) int {
 				h := tableToMultiMap(s, 3)
 				res, err := c.Form(s.CheckString(2), h)
 				if err != nil {
@@ -521,9 +459,8 @@ code string) ==> register handler without method limit.`,
 				}
 				return 2
 			}).
-		SafeMethod("do", `do(method, url, data string, header map[string]string)(Res?,error?) ==>perform  request`,
-			func(s *LState) int {
-				c := chkClient(s)
+		AddMethodCast("do", `do(method, url, data string, header map[string]string)(Res?,error?) ==>perform  request`,
+			func(s *LState, c *Client) int {
 				res, err := c.Do(
 					s.CheckString(2),
 					s.CheckString(3),
@@ -539,15 +476,18 @@ code string) ==> register handler without method limit.`,
 				}
 				return 2
 			}).
-		SafeMethod("doJson", `(method, url string,data json.Json, header map[string]string)(Res?,error?) ==>perform request`,
-			func(s *LState) int {
-				c := chkClient(s)
+		AddMethodCast("doJson", `(method, url string,data json.Json, header map[string]string)(Res?,error?) ==>perform request`,
+			func(s *LState, c *Client) int {
 				m := tableToMap(s, 5)
 				m["Content-BaseType"] = "application/json"
+				g, ok := json.JsonType.CastVar(s, 4)
+				if !ok {
+					return 0
+				}
 				res, err := c.Do(
 					s.CheckString(2),
 					s.CheckString(3),
-					json.JsonType.CastVar(s, 4).(*gabs.Container).String(),
+					g.String(),
 					m,
 				)
 				if err != nil {
@@ -559,9 +499,8 @@ code string) ==> register handler without method limit.`,
 				}
 				return 2
 			}).
-		SafeMethod("release", `release() ==>release this client`,
-			func(s *LState) int {
-				c := chkClient(s)
+		AddMethodCast("release", `release() ==>release this client`,
+			func(s *LState, c *Client) int {
 				delete(ClientPool, c.ID)
 				return 0
 			}).

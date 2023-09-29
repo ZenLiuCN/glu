@@ -1,7 +1,8 @@
 # GLU (glucose) - [gopher-lua](https://github.com/yuin/gopher-lua) module extensions
 ## Summary
 ### requires
- + go 1.17 (as gopher-lua required)
+ + go 1.17 (as gopher-lua required): `under branch g17`
+ + go 1.18 (with Generics): `current master`
 
 ## Packages
 

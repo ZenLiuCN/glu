@@ -1,13 +1,14 @@
 package json
 
 import (
+	"fmt"
 	. "github.com/Jeffail/gabs/v2"
 	. "github.com/ZenLiuCN/glu"
 	. "github.com/yuin/gopher-lua"
 )
 
 var (
-	JsonType   Type
+	JsonType   Type[*Container]
 	JsonModule Module
 )
 
@@ -31,21 +32,23 @@ func init() {
 		return nil, ""
 	}
 	JsonModule = NewModule("json", `json is wrap of jeffail/gabs as dynamic json tool.`, true)
-	JsonType = NewTypeCast(new(Container), "Json", `JSON object`, false, `(json string?)Json? ==> create Json instance.`,
-		func(s *LState) interface{} {
+	JsonType = NewTypeCast(func(a any) (v *Container, ok bool) { v, ok = a.(*Container); return }, "Json", `JSON object`, false, `(json string?)Json? ==> create Json instance.`,
+		func(s *LState) (*Container, bool) {
 			if s.GetTop() == 1 {
 				v, err := ParseJSON([]byte(s.CheckString(1)))
 				if err != nil {
 					s.ArgError(1, "invalid JSON string")
-					return 0
+					return nil, false
 				}
-				return v
+				return v, true
+			} else if s.GetTop() != 0 {
+				s.RaiseError("bad argument for create json.Json")
+				return nil, false
 			}
-			return New()
+			return New(), true
 		}).
 		AddMethodCast("json", `(pretty boolean=false,ident string='\t')string ==> json string of the Json, if empty will be '{}'.`,
-			func(s *LState, data interface{}) int {
-				v := data.(*Container)
+			func(s *LState, v *Container) int {
 				if s.GetTop() >= 2 {
 					s.CheckType(2, LTBool)
 					if s.ToBool(2) {
@@ -62,8 +65,7 @@ func init() {
 				return 1
 			}).
 		AddMethodCast("path", `(path string?)Json?  ==> fetch Json by path, path is gabs path.`,
-			func(s *LState, data interface{}) int {
-				v := data.(*Container)
+			func(s *LState, v *Container) int {
 				p := s.CheckString(2)
 				if v.ExistsP(p) {
 					return JsonType.New(s, v.Path(p))
@@ -72,15 +74,14 @@ func init() {
 				return 1
 			}).
 		AddMethodCast("exists", `(path string?)boolean  ==> check existence of path.`,
-			func(s *LState, data interface{}) int {
-				v := data.(*Container)
+			func(s *LState, v *Container) int {
 				p, _ := checkPath(s, v, 0)
 				s.Push(LBool(p != nil))
 				return 1
 			}).
 		AddMethodCast("at", `(key int|string)Json?  ==> fetch value at index for array or key for object.`,
-			func(s *LState, data interface{}) int {
-				v := data.(*Container)
+			func(s *LState, v *Container) int {
+
 				s.CheckTypes(2, LTString, LTNumber)
 				p := s.Get(2)
 				if p.Type() == LTString {
@@ -101,11 +102,9 @@ func init() {
 					return JsonType.New(s, x)
 				}
 				return 0
-			},
-		).
+			}).
 		AddMethodCast("type", `()int  ==> fetch JSON type: 0 nil,1 string,2 number,3 boolean,4 array,5 object.`,
-			func(s *LState, data interface{}) int {
-				v := data.(*Container)
+			func(s *LState, v *Container) int {
 				if _, ok := v.Data().(string); ok {
 					s.Push(LNumber(1))
 				} else if _, ok = v.Data().(float64); ok {
@@ -122,8 +121,7 @@ func init() {
 				return 1
 			}).
 		AddMethodCast("set", `(path string?, json JSON|string|number|bool|nil)string?  ==> set value at path.if value is nil,will delete it.this can't append array.'`,
-			func(s *LState, data interface{}) int {
-				v := data.(*Container)
+			func(s *LState, v *Container) int {
 				idx := 2
 				p := ""
 				if s.GetTop() == 2 {
@@ -132,13 +130,12 @@ func init() {
 					p = s.ToString(2)
 					idx = 3
 				}
-
 				s.CheckTypes(idx, LTUserData, LTString, LTNumber, LTBool, LTNil)
 				x := s.Get(idx)
-				val := unpack(x)
+				val, ok := unpack(x)
 				var err error
-				if val == nil {
-					s.ArgError(idx, "invalid data type")
+				if !ok {
+					s.ArgError(idx, fmt.Sprintf("invalid data type of %T", x))
 					return 0
 				} else if val == LNil {
 					if p == "" {
@@ -171,8 +168,7 @@ func init() {
 				return 0
 			}).
 		AddMethodCast("append", `(path string?, json JSON|string|number|bool|nil)string?  ==> append value, path must pointer to array.`,
-			func(s *LState, data interface{}) int {
-				c := data.(*Container)
+			func(s *LState, c *Container) int {
 				_, p := checkPath(s, c, 1)
 				var idx int
 				if p != "" {
@@ -182,8 +178,8 @@ func init() {
 				}
 				s.CheckTypes(idx, LTUserData, LTString, LTNumber, LTBool, LTNil)
 				x := s.Get(idx)
-				val := unpack(x)
-				if val == nil {
+				val, ok := unpack(x)
+				if !ok {
 					s.ArgError(idx, "invalid data type")
 					return 0
 				} else if val == LNil {
@@ -251,8 +247,8 @@ func init() {
 				return 0
 			}).
 		AddMethodCast("isArray", `(path string?)bool  ==> check if it's array at path.`,
-			func(s *LState, data interface{}) int {
-				c := data.(*Container)
+			func(s *LState, c *Container) int {
+
 				v, _ := checkPath(s, c, 0)
 				if v == nil {
 					s.Push(LFalse)
@@ -266,8 +262,7 @@ func init() {
 				return 1
 			}).
 		AddMethodCast("isObject", `(path string?)bool  ==> check if it's object at path.`,
-			func(s *LState, data interface{}) int {
-				c := data.(*Container)
+			func(s *LState, c *Container) int {
 				v, _ := checkPath(s, c, 0)
 				if v == nil {
 					s.Push(LFalse)
@@ -280,8 +275,7 @@ func init() {
 				return 1
 			}).
 		AddMethodCast("bool", `(path string?)bool  ==> fetch value as boolean, if not exists return false.`,
-			func(s *LState, data interface{}) int {
-				c := data.(*Container)
+			func(s *LState, c *Container) int {
 				v, _ := checkPath(s, c, 0)
 				if v == nil {
 					s.Push(LFalse)
@@ -295,8 +289,7 @@ func init() {
 				return 1
 			}).
 		AddMethodCast("string", `(path string?)string?  ==> fetch value as string, if not exists or not string return nil.`,
-			func(s *LState, data interface{}) int {
-				c := data.(*Container)
+			func(s *LState, c *Container) int {
 				v, _ := checkPath(s, c, 0)
 				if v == nil {
 					s.Push(LNil)
@@ -308,8 +301,7 @@ func init() {
 				return 1
 			}).
 		AddMethodCast("number", `(path string?)number?  ==> fetch value as number, if not exists return nil.`,
-			func(s *LState, data interface{}) int {
-				c := data.(*Container)
+			func(s *LState, c *Container) int {
 				v, _ := checkPath(s, c, 0)
 				if v == nil {
 					s.Push(LNil)
@@ -321,8 +313,7 @@ func init() {
 				return 1
 			}).
 		AddMethodCast("size", `(path string?)number?  ==> fetch  object size or array size else nil.`,
-			func(s *LState, data interface{}) int {
-				c := data.(*Container)
+			func(s *LState, c *Container) int {
 				v, _ := checkPath(s, c, 0)
 				if b, ok := v.Data().(map[string]interface{}); ok {
 					s.Push(LNumber(len(b)))
@@ -409,23 +400,23 @@ func parseTable(t *LTable, g *Container) *Container {
 	})
 	return g
 }
-func unpack(v LValue) interface{} {
+func unpack(v LValue) (interface{}, bool) {
 	switch v.Type() {
 	case LTString:
-		return v.String()
+		return v.String(), true
 	case LTNumber:
-		return float64(v.(LNumber))
+		return float64(v.(LNumber)), true
 	case LTBool:
-		return v == LTrue
-	case LTNil:
-		return LNil
+		return v == LTrue, true
+	case LTNil: //LNil keep the same
+		return LNil, true
 	case LTUserData:
 		if j, ok := v.(*LUserData).Value.(*Container); ok {
-			return j.Data()
+			return j.Data(), true
 		} else {
-			return nil
+			return nil, false
 		}
 	default:
-		return nil
+		return nil, false
 	}
 }

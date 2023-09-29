@@ -20,6 +20,9 @@ type Modular interface {
 	//GetHelp Modular HelpCache info
 	GetHelp() string
 }
+type Prepare interface {
+	prepare()
+}
 
 var (
 	//HelpKey the module HelpCache key
@@ -157,7 +160,7 @@ func helpOperatorReg(operators map[Operate]funcInfo, hasMethods bool, helps map[
 
 	}
 }
-func helpCtorReg(ctor func(*lua.LState) interface{}, ctor2 string, help map[string]string, mh *strings.Builder, name string) {
+func helpCtorReg[T any](ctor func(*lua.LState) (T, bool), ctor2 string, help map[string]string, mh *strings.Builder, name string) {
 	if ctor != nil {
 		if ctor2 != "" {
 			help["new"] = fmt.Sprintf("%s.new %s", name, ctor2)

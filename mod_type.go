@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	. "github.com/yuin/gopher-lua"
-	"reflect"
 	"strings"
 )
 
@@ -30,115 +29,130 @@ const (
 )
 
 type Operate int
-type Type interface {
+
+type Type[T any] interface {
 	Modular
-	// Type the real go type
-	Type() reflect.Type
-	// New create new instance
-	New(l *LState, val interface{}) int
+
+	// New create new instance and push on stack
+	New(l *LState, val T) int
 	// NewValue create new LValue
-	NewValue(l *LState, val interface{}) *LUserData
+	NewValue(l *LState, val T) *LUserData
 	// CanCast check the type can use cast (when construct with NewTypeCast)
 	CanCast() bool
 	// CastVar  cast value on stack (already have error processed)
-	CastVar(s *LState, n int) interface{}
-	// Cast nil if not current type else the value
-	Cast(u *LUserData) interface{}
+	CastVar(s *LState, n int) (T, bool)
+	// Cast  receiver on stack (already have error processed)
+	Cast(s *LState) (T, bool)
+	// CastUserData cast UserData (already have error processed)
+	CastUserData(ud *LUserData, s *LState) (T, bool)
+	// Caster  cast value
+	Caster() func(any) (T, bool)
 
 	// AddFunc static function
-	AddFunc(name string, help string, fn LGFunction) Type
+	AddFunc(name string, help string, fn LGFunction) Type[T]
 	//SafeFun warp with SafeFunc
-	SafeFun(name string, help string, value LGFunction) Type
+	SafeFun(name string, help string, value LGFunction) Type[T]
 
 	// AddField static field
-	AddField(name string, help string, value LValue) Type
+	AddField(name string, help string, value LValue) Type[T]
 	//SafeMethod warp with SafeFunc
-	SafeMethod(name string, help string, value LGFunction) Type
+	SafeMethod(name string, help string, value LGFunction) Type[T]
 	// AddMethod add method to this type which means instance method.
-	AddMethod(name string, help string, value LGFunction) Type
+	AddMethod(name string, help string, value LGFunction) Type[T]
 
 	// AddMethodUserData add method to this type which means instance method, with auto extract first argument.
-	AddMethodUserData(name string, help string, act func(s *LState, u *LUserData) int) Type
+	AddMethodUserData(name string, help string, act func(s *LState, u *LUserData) int) Type[T]
 
 	// AddMethodCast prechecked type (only create with NewTypeCast).
-	AddMethodCast(name string, help string, act func(s *LState, i interface{}) int) Type
+	AddMethodCast(name string, help string, act func(s *LState, i T) int) Type[T]
 
 	// Override operators an operator
-	Override(op Operate, help string, fn LGFunction) Type
+	Override(op Operate, help string, fn LGFunction) Type[T]
 
 	//SafeOverride warp with SafeFunc
-	SafeOverride(op Operate, help string, value LGFunction) Type
+	SafeOverride(op Operate, help string, value LGFunction) Type[T]
 
 	// OverrideUserData see Override and AddMethodUserData
-	OverrideUserData(op Operate, help string, act func(s *LState, u *LUserData) int) Type
+	OverrideUserData(op Operate, help string, act func(s *LState, u *LUserData) int) Type[T]
 
 	// OverrideCast see Override and AddMethodCast
-	OverrideCast(op Operate, help string, act func(s *LState, i interface{}) int) Type
+	OverrideCast(op Operate, help string, act func(s *LState, i T) int) Type[T]
 }
 
 // BaseType define a LTable with MetaTable, which mimicry class like action in Lua
-type BaseType struct {
-	*Mod
+type BaseType[T any] struct {
+	Mod         *Mod
 	HelpCtor    string
-	signature   reflect.Type              //reflect.Type
-	constructor func(*LState) interface{} //Constructor for this BaseType , also can define other Constructor by add functions
+	caster      func(any) (T, bool)
+	defVal      T
+	constructor func(*LState) (T, bool) //Constructor for this BaseType , also can define other Constructor by add functions
 	methods     map[string]funcInfo
 	fields      map[string]fieldInfo
 	operators   map[Operate]funcInfo
 }
 
 // NewSimpleType create new BaseType without ctor
-func NewSimpleType(name string, help string, top bool) *BaseType {
-	return &BaseType{Mod: &Mod{Name: name, Top: top, Help: help}}
+func NewSimpleType[T any](name string, help string, top bool) *BaseType[T] {
+	return &BaseType[T]{Mod: &Mod{Name: name, Top: top, Help: help}}
 }
 
 // NewType create new BaseType
-func NewType(name string, help string, top bool, ctorHelp string, ctor func(*LState) interface{}) *BaseType {
-	return &BaseType{Mod: &Mod{Name: name, Top: top, Help: help}, constructor: ctor, HelpCtor: ctorHelp}
+func NewType[T any](name string, help string, top bool, ctorHelp string, ctor func(*LState) (T, bool)) *BaseType[T] {
+	return &BaseType[T]{Mod: &Mod{Name: name, Top: top, Help: help}, constructor: ctor, HelpCtor: ctorHelp}
 }
 
 // NewTypeCast create new BaseType with reflect Signature
-func NewTypeCast(sample interface{}, name string, help string, top bool, ctorHelp string, ctor func(*LState) interface{}) *BaseType {
-	return &BaseType{Mod: &Mod{Name: name, Top: top, Help: help}, signature: reflect.TypeOf(sample), constructor: ctor, HelpCtor: ctorHelp}
+func NewTypeCast[T any](caster func(a any) (v T, ok bool), name string, help string, top bool, ctorHelp string, ctor func(s *LState) (v T, ok bool)) *BaseType[T] {
+	return &BaseType[T]{Mod: &Mod{Name: name, Top: top, Help: help}, caster: caster, constructor: ctor, HelpCtor: ctorHelp}
 }
-func (m *BaseType) Type() reflect.Type {
-	return m.signature
+
+func (m *BaseType[T]) TopLevel() bool {
+	return m.Mod.TopLevel()
 }
-func (m *BaseType) prepare() {
-	if m.prepared {
+
+func (m *BaseType[T]) GetName() string {
+	return m.Mod.GetName()
+}
+
+func (m *BaseType[T]) GetHelp() string {
+	return m.Mod.GetHelp()
+}
+
+func (m *BaseType[T]) prepare() {
+	if m.Mod.prepared {
 		return
 	}
 	help := make(map[string]string)
 	mh := new(strings.Builder) //mod HelpCache builder
-	if m.Help != "" {
-		mh.WriteString(m.Help)
+	if m.Mod.Help != "" {
+		mh.WriteString(m.Mod.Help)
 		mh.WriteRune('\n')
 	} else {
-		mh.WriteString(m.Name)
+		mh.WriteString(m.Mod.Name)
 		mh.WriteRune('\n')
 	}
-	helpFuncReg(m.functions, help, mh, m.Name)
-	helpFieldReg(m.fields, help, mh, m.Name)
-	helpMethodReg(m.methods, help, mh, m.Name)
-	helpOperatorReg(m.operators, len(m.methods) > 0, help, mh, m.Name)
-	helpSubModReg(m.Submodules, help, mh, m.Name)
-	helpCtorReg(m.constructor, m.HelpCtor, help, mh, m.Name)
+	helpFuncReg(m.Mod.functions, help, mh, m.Mod.Name)
+	helpFieldReg(m.fields, help, mh, m.Mod.Name)
+	helpMethodReg(m.methods, help, mh, m.Mod.Name)
+	helpOperatorReg(m.operators, len(m.methods) > 0, help, mh, m.Mod.Name)
+	helpSubModReg(m.Mod.Submodules, help, mh, m.Mod.Name)
+	helpCtorReg(m.constructor, m.HelpCtor, help, mh, m.Mod.Name)
 	if mh.Len() > 0 {
 		help[HelpKey] = mh.String()
 	}
 	//prepare sub modules?
-	if EagerHelpPrepare && len(m.Submodules) > 0 {
-		for _, sub := range m.Submodules {
+	if EagerHelpPrepare && len(m.Mod.Submodules) > 0 {
+		for _, sub := range m.Mod.Submodules {
 			switch sub.(type) {
-			case *Mod:
-				sub.(*Mod).prepare()
-			case *BaseType:
-				sub.(*BaseType).prepare()
+			case Prepare:
+				sub.(Prepare).prepare()
+			default:
+				panic("unknown sub type")
 			}
 		}
 	}
-	m.HelpCache = help
-	m.prepared = true
+	m.Mod.HelpCache = help
+	m.Mod.prepared = true
 
 }
 
@@ -149,14 +163,14 @@ func (m *BaseType) prepare() {
 // @HelpCache HelpCache string, if empty will not generate into HelpCache
 //
 // @fn the LGFunction
-func (m *BaseType) AddFunc(name string, help string, fn LGFunction) Type {
+func (m *BaseType[T]) AddFunc(name string, help string, fn LGFunction) Type[T] {
 	m.Mod.AddFunc(name, help, fn)
 	return m
 
 }
 
 //SafeFun warp with SafeFunc
-func (m *BaseType) SafeFun(name string, help string, fn LGFunction) Type {
+func (m *BaseType[T]) SafeFun(name string, help string, fn LGFunction) Type[T] {
 	m.Mod.AddFunc(name, help, SafeFunc(fn))
 	return m
 
@@ -169,7 +183,7 @@ func (m *BaseType) SafeFun(name string, help string, fn LGFunction) Type {
 // @HelpCache HelpCache string, if empty will not generate into HelpCache
 //
 // @value the field value
-func (m *BaseType) AddField(name string, help string, value LValue) Type {
+func (m *BaseType[T]) AddField(name string, help string, value LValue) Type[T] {
 	m.Mod.AddField(name, help, value)
 	return m
 }
@@ -177,39 +191,39 @@ func (m *BaseType) AddField(name string, help string, value LValue) Type {
 // AddModule add sub-module to this Modular
 //
 // @mod the Mod **Note** must with TopLevel false.
-func (m *BaseType) AddModule(mod Modular) Type {
+func (m *BaseType[T]) AddModule(mod Modular) Type[T] {
 	m.Mod.AddModule(mod)
 	return m
 
 }
-func (m *BaseType) PreLoad(l *LState) {
-	if !m.Top {
+func (m *BaseType[T]) PreLoad(l *LState) {
+	if !m.Mod.Top {
 		return
 	}
 
-	l.SetGlobal(m.Name, m.getOrBuildMeta(l))
+	l.SetGlobal(m.Mod.Name, m.getOrBuildMeta(l))
 }
-func (m *BaseType) PreloadSubModule(l *LState, t *LTable) {
-	if m.Top {
+func (m *BaseType[T]) PreloadSubModule(l *LState, t *LTable) {
+	if m.Mod.Top {
 		return
 	}
-	t.RawSetString(m.Name, m.getOrBuildMeta(l))
+	t.RawSetString(m.Mod.Name, m.getOrBuildMeta(l))
 }
 
-func (m *BaseType) getOrBuildMeta(l *LState) *LTable {
+func (m *BaseType[T]) getOrBuildMeta(l *LState) *LTable {
 	m.prepare()
 	var mt *LTable
 	var ok bool
-	if mt, ok = l.GetTypeMetatable(m.Name).(*LTable); ok {
+	if mt, ok = l.GetTypeMetatable(m.Mod.Name).(*LTable); ok {
 		return mt
 	}
-	mt = l.NewTypeMetatable(m.Name)
+	mt = l.NewTypeMetatable(m.Mod.Name)
 	fn := make(map[string]LGFunction)
 	if m.constructor != nil {
 		l.SetField(mt, "new", l.NewFunction(m.new))
 	}
-	if len(m.functions) > 0 {
-		for s, info := range m.functions {
+	if len(m.Mod.functions) > 0 {
+		for s, info := range m.Mod.functions {
 			fn[s] = info.Func
 		}
 	}
@@ -218,13 +232,13 @@ func (m *BaseType) getOrBuildMeta(l *LState) *LTable {
 			l.SetField(mt, key, value.Value)
 		}
 	}
-	if len(m.Submodules) > 0 {
-		for _, t := range m.Submodules {
+	if len(m.Mod.Submodules) > 0 {
+		for _, t := range m.Mod.Submodules {
 			t.PreloadSubModule(l, mt)
 		}
 	}
 	if len(m.methods) > 0 {
-		method := make(map[string]LGFunction, len(m.functions))
+		method := make(map[string]LGFunction, len(m.Mod.functions))
 		for s, info := range m.methods {
 			method[s] = info.Func
 		}
@@ -278,8 +292,8 @@ func (m *BaseType) getOrBuildMeta(l *LState) *LTable {
 		}
 
 	}
-	if len(m.HelpCache) > 0 {
-		fn[HelpFunc] = helpFn(m.HelpCache)
+	if len(m.Mod.HelpCache) > 0 {
+		fn[HelpFunc] = helpFn(m.Mod.HelpCache)
 	}
 	if len(fn) > 0 {
 		l.SetFuncs(mt, fn)
@@ -288,7 +302,7 @@ func (m *BaseType) getOrBuildMeta(l *LState) *LTable {
 }
 
 // New wrap an instance into LState
-func (m BaseType) New(l *LState, val interface{}) int {
+func (m BaseType[T]) New(l *LState, val T) int {
 	ud := l.NewUserData()
 	ud.Value = val
 	l.SetMetatable(ud, m.getOrBuildMeta(l))
@@ -297,7 +311,7 @@ func (m BaseType) New(l *LState, val interface{}) int {
 }
 
 // NewValue create new LValue
-func (m BaseType) NewValue(l *LState, val interface{}) *LUserData {
+func (m BaseType[T]) NewValue(l *LState, val T) *LUserData {
 	ud := l.NewUserData()
 	ud.Value = val
 	l.SetMetatable(ud, m.getOrBuildMeta(l))
@@ -305,7 +319,7 @@ func (m BaseType) NewValue(l *LState, val interface{}) *LUserData {
 }
 
 // new internal creator
-func (m BaseType) new(s *LState) (n int) {
+func (m BaseType[T]) new(s *LState) (n int) {
 	defer func() {
 		if r := recover(); r != nil {
 
@@ -323,44 +337,62 @@ func (m BaseType) new(s *LState) (n int) {
 			n = 0
 		}
 	}()
-	val := m.constructor(s)
+	val, ok := m.constructor(s)
+	if !ok {
+		return 0
+	}
 	ud := s.NewUserData()
 	ud.Value = val
-	s.SetMetatable(ud, s.GetTypeMetatable(m.Name))
+	s.SetMetatable(ud, s.GetTypeMetatable(m.Mod.Name))
 	s.Push(ud)
 	return 1
 }
 
 // CanCast check the type can use cast (when construct with NewTypeCast)
-func (m BaseType) CanCast() bool {
-	return m.signature != nil
+func (m BaseType[T]) CanCast() bool {
+	return m.caster != nil
 }
 
 // CastVar  cast value on stack
-func (m BaseType) CastVar(s *LState, n int) interface{} {
+func (m BaseType[T]) CastVar(s *LState, n int) (T, bool) {
 	u := s.CheckUserData(n)
 	if u == nil {
-		return nil
+		return m.defVal, false
 	}
-	v := m.Cast(u)
-	if v == nil {
-		s.ArgError(n, "require type "+m.Name)
-		return nil
+	v, ok := m.caster(u.Value)
+	if !ok {
+		s.ArgError(n, "require type "+m.Mod.Name)
+		return m.defVal, false
 	}
-	return v
+	return v, true
 
 }
-
-// Cast nil if not current type else the value
-func (m BaseType) Cast(u *LUserData) interface{} {
-	if u == nil || reflect.TypeOf(u.Value) != m.signature {
-		return nil
+func (m BaseType[T]) CastUserData(ud *LUserData, s *LState) (T, bool) {
+	v, ok := m.caster(ud.Value)
+	if !ok {
+		s.ArgError(1, "require receiver type "+m.Mod.Name)
+		return m.defVal, false
 	}
-	return u.Value
+	return v, true
+}
+func (m BaseType[T]) Cast(s *LState) (T, bool) {
+	u := s.CheckUserData(1)
+	if u == nil {
+		return m.defVal, false
+	}
+	v, ok := m.caster(u.Value)
+	if !ok {
+		s.ArgError(1, "require receiver type "+m.Mod.Name)
+		return m.defVal, false
+	}
+	return v, true
+}
+func (m *BaseType[T]) Caster() func(any) (T, bool) {
+	return m.caster
 }
 
 // AddMethod add method to this type which means instance method.
-func (m *BaseType) AddMethod(name string, help string, value LGFunction) Type {
+func (m *BaseType[T]) AddMethod(name string, help string, value LGFunction) Type[T] {
 	if m.methods == nil {
 		m.methods = make(map[string]funcInfo)
 	} else if _, ok := m.methods[name]; ok {
@@ -371,7 +403,7 @@ func (m *BaseType) AddMethod(name string, help string, value LGFunction) Type {
 }
 
 //SafeMethod warp with SafeFunc
-func (m *BaseType) SafeMethod(name string, help string, value LGFunction) Type {
+func (m *BaseType[T]) SafeMethod(name string, help string, value LGFunction) Type[T] {
 	if m.methods == nil {
 		m.methods = make(map[string]funcInfo)
 	} else if _, ok := m.methods[name]; ok {
@@ -382,8 +414,15 @@ func (m *BaseType) SafeMethod(name string, help string, value LGFunction) Type {
 }
 
 // AddMethodUserData add method to this type which means instance method, with auto extract first argument.
-func (m *BaseType) AddMethodUserData(name string, help string, act func(s *LState, data *LUserData) int) Type {
+func (m *BaseType[T]) AddMethodUserData(name string, help string, act func(s *LState, data *LUserData) int) Type[T] {
 	return m.AddMethod(name, help, func(s *LState) int {
+		defer func() {
+			if r := recover(); r == nil {
+				s.Pop(1)
+			} else {
+				panic(r)
+			}
+		}()
 		u := s.CheckUserData(1)
 		if u == nil {
 			return 0
@@ -393,17 +432,13 @@ func (m *BaseType) AddMethodUserData(name string, help string, act func(s *LStat
 }
 
 // AddMethodCast prechecked type (only create with NewTypeCast).
-func (m *BaseType) AddMethodCast(name string, help string, act func(s *LState, data interface{}) int) Type {
+func (m *BaseType[T]) AddMethodCast(name string, help string, act func(s *LState, data T) int) Type[T] {
 	if !m.CanCast() {
 		panic("can't use AddMethodCast for not create with NewTypeCast")
 	}
 	return m.AddMethod(name, help, func(s *LState) int {
-		u := s.CheckUserData(1)
-		if u == nil {
-			return 0
-		}
-		d := m.Cast(u)
-		if d == nil {
+		d, ok := m.Cast(s)
+		if !ok {
 			return 0
 		}
 		return act(s, d)
@@ -411,7 +446,7 @@ func (m *BaseType) AddMethodCast(name string, help string, act func(s *LState, d
 }
 
 // Override operators an operator
-func (m *BaseType) Override(op Operate, help string, fn LGFunction) Type {
+func (m *BaseType[T]) Override(op Operate, help string, fn LGFunction) Type[T] {
 	if m.operators == nil {
 		m.operators = make(map[Operate]funcInfo)
 	} else if _, ok := m.operators[op]; ok {
@@ -422,7 +457,7 @@ func (m *BaseType) Override(op Operate, help string, fn LGFunction) Type {
 }
 
 //SafeOverride wrap with SafeFunc
-func (m *BaseType) SafeOverride(op Operate, help string, fn LGFunction) Type {
+func (m *BaseType[T]) SafeOverride(op Operate, help string, fn LGFunction) Type[T] {
 	if m.operators == nil {
 		m.operators = make(map[Operate]funcInfo)
 	} else if _, ok := m.operators[op]; ok {
@@ -433,7 +468,7 @@ func (m *BaseType) SafeOverride(op Operate, help string, fn LGFunction) Type {
 }
 
 // OverrideUserData see Override and AddMethodUserData
-func (m *BaseType) OverrideUserData(op Operate, help string, act func(s *LState, data *LUserData) int) Type {
+func (m *BaseType[T]) OverrideUserData(op Operate, help string, act func(s *LState, data *LUserData) int) Type[T] {
 	return m.Override(op, help, func(s *LState) int {
 		u := s.CheckUserData(1)
 		if u == nil {
@@ -444,13 +479,13 @@ func (m *BaseType) OverrideUserData(op Operate, help string, act func(s *LState,
 }
 
 // OverrideCast see Override and AddMethodCast
-func (m *BaseType) OverrideCast(op Operate, help string, act func(s *LState, data interface{}) int) Type {
+func (m *BaseType[T]) OverrideCast(op Operate, help string, act func(s *LState, data T) int) Type[T] {
 	if !m.CanCast() {
 		panic("can't use OverrideCast for not create with NewTypeCast")
 	}
 	return m.Override(op, help, func(s *LState) int {
-		d := m.CastVar(s, 1)
-		if d == nil {
+		d, ok := m.CastVar(s, 1)
+		if !ok {
 			return 0
 		}
 		return act(s, d)

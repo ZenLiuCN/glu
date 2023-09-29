@@ -91,10 +91,8 @@ func (m *Mod) prepare() {
 	if EagerHelpPrepare && len(m.Submodules) > 0 {
 		for _, sub := range m.Submodules {
 			switch sub.(type) {
-			case *Mod:
-				sub.(*Mod).prepare()
-			case *BaseType:
-				sub.(*BaseType).prepare()
+			case Prepare:
+				sub.(Prepare).prepare()
 			}
 		}
 	}
