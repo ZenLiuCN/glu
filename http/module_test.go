@@ -2,7 +2,7 @@ package http
 
 import (
 	"bytes"
-	"github.com/ZenLiuCN/glu/v1"
+	"github.com/ZenLiuCN/glu/v2"
 	"github.com/yuin/gopher-lua"
 	"io/ioutil"
 	"net/http"

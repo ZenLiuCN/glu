@@ -3,7 +3,7 @@ package json
 import (
 	"fmt"
 	. "github.com/Jeffail/gabs/v2"
-	. "github.com/ZenLiuCN/glu/v1"
+	. "github.com/ZenLiuCN/glu/v2"
 	. "github.com/yuin/gopher-lua"
 )
 
