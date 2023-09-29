@@ -3,8 +3,8 @@ package http
 import (
 	"fmt"
 	"github.com/Jeffail/gabs/v2"
-	. "github.com/ZenLiuCN/glu"
-	"github.com/ZenLiuCN/glu/json"
+	. "github.com/ZenLiuCN/glu/v1"
+	"github.com/ZenLiuCN/glu/v1/json"
 	. "github.com/yuin/gopher-lua"
 	"io/ioutil"
 	"log"

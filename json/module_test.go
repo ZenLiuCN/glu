@@ -1,7 +1,7 @@
 package json
 
 import (
-	. "github.com/ZenLiuCN/glu"
+	. "github.com/ZenLiuCN/glu/v1"
 	"testing"
 )
 
