@@ -27,7 +27,7 @@ func TestJsonQuery1(t *testing.T) {
 local j=require('json').Json.new()
 assert(j:at(true))
 `, 0, 0, nil, nil) == nil {
-		t.Fatal()
+		t.Fatal("should fail")
 	}
 
 }
@@ -82,7 +82,7 @@ local j=json.Json.new('{"a":1,"b":{"c":1}}')
 assert(j:append(1)==nil)
 assert(j:append("b",1)==nil)
 `, 0, 0, nil, nil); err == nil {
-		t.Fatal()
+		t.Fatal("should fail")
 	}
 
 }
@@ -92,7 +92,7 @@ local json=require('json')
 local j=json.Json.new('{"a":1,"b":{"c":1}}')
 assert(j:append("b",1)==nil)
 `, 0, 0, nil, nil); err == nil {
-		t.Fatal()
+		t.Fatal("should fail")
 	}
 }
 func TestJsonAppend3(t *testing.T) {
@@ -140,7 +140,7 @@ local json=require('json')
 local j=json.Json.new('{"a":1}')
 assert(j:append(1)==nil)
 `, 0, 0, nil, nil); err == nil {
-		t.Fatal()
+		t.Fatal("should fail")
 	}
 	if err := ExecuteCode(`
 local json=require('json')
@@ -169,7 +169,7 @@ func TestJsonCreate(t *testing.T) {
 local json=require('json')
 local j=json.Json.new({1,2,3})
 `, 0, 0, nil, nil); err == nil {
-		t.Fatal()
+		t.Fatal("should fail")
 	}
 	if err := ExecuteCode(`
 local json=require('json')

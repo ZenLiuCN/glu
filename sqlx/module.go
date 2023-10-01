@@ -35,7 +35,7 @@ func init() {
 			}
 			return SqlxDBType.New(s, db)
 		})
-	SqlxDBType = NewTypeCast[*sqlx.DB](func(a any) (v *sqlx.DB, ok bool) { v, ok = a.(*sqlx.DB); return }, `DB`, `sqlx.DB`, false, `new(driver:string,dsn:string)sqlx.DB`,
+	SqlxDBType = NewTypeCast[*sqlx.DB](func(a any) (v *sqlx.DB, ok bool) { v, ok = a.(*sqlx.DB); return }, `DB`, `sqlx.DB wrap`, false, `new(driver:string,dsn:string)sqlx.DB`,
 		func(s *lua.LState) (v *sqlx.DB, ok bool) {
 			d := s.CheckString(1)
 			if d == "" {
@@ -52,7 +52,7 @@ func init() {
 			}
 			return db, true
 		}).
-		AddMethodCast(`query`, `query(string,json.Json?)json.Json =>query database`, func(s *lua.LState, data *sqlx.DB) int {
+		AddMethodCast(`query`, `query(string,Json?)json.Json =>query database`, func(s *lua.LState, data *sqlx.DB) int {
 			q, ok := CheckString(s, 2)
 			if !ok {
 				return 0
@@ -61,20 +61,18 @@ func init() {
 			var err error
 			if s.GetTop() == 3 {
 				if j, ok := json.JsonType.CastVar(s, 3); ok {
-					i, ok := j.Data().(map[string]any)
-					if !ok {
-						if i1, ok := j.Data().([]any); ok {
-							r, err = data.Queryx(q, i1)
-						} else {
-							s.ArgError(2, "must a json object or json array")
-							return 0
-						}
+					if m, ok := j.Data().(map[string]any); ok {
+						r, err = data.NamedQuery(q, m)
+					} else if i1, ok := j.Data().([]any); ok {
+						r, err = data.Queryx(q, i1...)
 					} else {
-						r, err = data.NamedQuery(q, i)
+						s.ArgError(3, "must a json object or json array")
+						return 0
 					}
+				} else {
+					s.ArgError(3, "must a json object or json array")
+					return 0
 				}
-				s.ArgError(3, "must a json object or json array")
-				return 0
 			} else if s.GetTop() != 2 {
 				s.ArgError(3, fmt.Sprintf("argument error with %d args", s.GetTop()-1))
 				return 0
@@ -82,7 +80,7 @@ func init() {
 				r, err = data.Queryx(q)
 			}
 			if err != nil {
-				s.RaiseError("query error :%s", err)
+				s.RaiseError("query '%s' error :%s", q, err)
 				return 0
 			}
 			defer r.Close()
@@ -105,43 +103,41 @@ func init() {
 			}
 			return 0
 		}).
-		AddMethodCast(`exec`, `exec(string,json.Json?)sqlx.Result => exec SQL`, func(s *lua.LState, data *sqlx.DB) int {
+		AddMethodCast(`exec`, `exec(string,Json?)sqlx.Result => exec SQL`, func(s *lua.LState, data *sqlx.DB) int {
 			q, ok := CheckString(s, 2)
 			if !ok {
 				return 0
 			}
 			var r sql.Result
 			var err error
-			if s.GetTop() == 2 {
-				if j, ok := json.JsonType.CastVar(s, 2); ok {
-					i, ok := j.Data().(map[string]any)
-					if !ok {
-						if i1, ok := j.Data().([]any); ok {
-							r, err = data.Exec(q, i1)
-						} else {
-							s.ArgError(2, "must a json object or json array")
-							return 0
-						}
+			if s.GetTop() == 3 {
+				if j, ok := json.JsonType.CastVar(s, 3); ok {
+					if m, ok := j.Data().(map[string]any); ok {
+						r, err = data.NamedExec(q, m)
+					} else if i1, ok := j.Data().([]any); ok {
+						r, err = data.Exec(q, i1...)
 					} else {
-						r, err = data.NamedExec(q, i)
+						s.ArgError(3, "must a json object or json array")
+						return 0
 					}
+				} else {
+					s.ArgError(3, "must a json object or json array")
+					return 0
 				}
-				s.ArgError(2, "must a json object or json array")
-				return 0
-			} else if s.GetTop() != 1 {
-				s.ArgError(2, fmt.Sprintf("argument error with %d args", s.GetTop()-1))
+			} else if s.GetTop() != 2 {
+				s.ArgError(3, fmt.Sprintf("argument error with %d args", s.GetTop()-1))
 				return 0
 			} else {
 				r, err = data.Exec(q)
 			}
 			if err != nil {
-				s.RaiseError("query error :%s", err)
+				s.RaiseError("exec error :%s", err)
 				return 0
 			}
 			return SqlResultType.New(s, r)
 		})
-	SqlResultType = NewTypeCast[sql.Result](func(a any) (v sql.Result, ok bool) { v, ok = a.(sql.Result); return }, `Result`, `sqlx.Result`, false, ``, nil).
-		AddMethodCast(`insertedId`, `insertedId()number => last inserted id or raise error`, func(s *lua.LState, data sql.Result) int {
+	SqlResultType = NewTypeCast[sql.Result](func(a any) (v sql.Result, ok bool) { v, ok = a.(sql.Result); return }, `Result`, `sql.Result wrap`, false, ``, nil).
+		AddMethodCast(`lastID`, `lastID()number => last inserted id or raise error`, func(s *lua.LState, data sql.Result) int {
 			v, err := data.LastInsertId()
 			if err != nil {
 				s.RaiseError("error %s", err)
@@ -150,7 +146,7 @@ func init() {
 			s.Push(lua.LNumber(v))
 			return 1
 		}).
-		AddMethodCast(`rowsAffected`, `rowsAffected()number =>affected rows or raise error`, func(s *lua.LState, data sql.Result) int {
+		AddMethodCast(`rows`, `rows()number =>affected rows or raise error`, func(s *lua.LState, data sql.Result) int {
 			v, err := data.RowsAffected()
 			if err != nil {
 				s.RaiseError("error %s", err)

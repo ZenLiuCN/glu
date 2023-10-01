@@ -13,6 +13,7 @@
    4. Support `Help(string?)` for help information;
 2. √ `json` dynamic json library base on [Jeffail/gabs](https://github.com/Jeffail/gabs/v2)
 3. √ `http` http server and client library base on [gorilla/mux](https://github.com/gorilla/mux), depends on `json`
+4. √ `sqlx` sqlx base on [jmoiron/sqlx](https://github.com/jmoiron/sqlx), depends on `json`, new in version `v2.0.2`
 
 ## Samples
 1. use

@@ -31,7 +31,21 @@ func init() {
 		}
 		return nil, ""
 	}
-	JsonModule = NewModule("json", `json is wrap of jeffail/gabs as dynamic json tool.`, true)
+	JsonModule = NewModule("json", `json is wrap of jeffail/gabs as dynamic json tool.`, true).
+		AddFunc("of", "(string?)json.Json? => same as json.Json.new()", func(s *LState) int {
+			if s.GetTop() == 1 {
+				v, err := ParseJSON([]byte(s.CheckString(1)))
+				if err != nil {
+					s.ArgError(1, "invalid JSON string")
+					return 0
+				}
+				return JsonType.New(s, v)
+			} else if s.GetTop() != 0 {
+				s.RaiseError("bad argument for create json")
+				return 0
+			}
+			return JsonType.New(s, New())
+		})
 	JsonType = NewTypeCast(func(a any) (v *Container, ok bool) { v, ok = a.(*Container); return }, "Json", `JSON object`, false, `(json string?)Json? ==> create Json instance.`,
 		func(s *LState) (*Container, bool) {
 			if s.GetTop() == 1 {
