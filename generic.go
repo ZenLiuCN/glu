@@ -145,3 +145,21 @@ func CheckRecUserData[T any](s *lua.LState, ud *lua.LUserData, def T, cast func(
 	}
 	return a, true
 }
+
+// Raise recover panic and raise error to Lua
+func Raise(s *lua.LState, act func() int) (ret int) {
+	defer func() {
+		if r := recover(); r != nil {
+			switch er := r.(type) {
+			case error:
+				s.RaiseError(`failure: %s`, er)
+			case string:
+				s.RaiseError(`failure: %s`, er)
+			default:
+				s.RaiseError(`failure: %s`, er)
+			}
+			ret = 0
+		}
+	}()
+	return act()
+}
