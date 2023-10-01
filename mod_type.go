@@ -325,7 +325,7 @@ func (m BaseType[T]) new(s *LState) (n int) {
 
 			switch r.(type) {
 			case error:
-				if errors.Is(r.(error), ErrorSupress) {
+				if errors.Is(r.(error), ErrorSuppress) {
 					break
 				}
 				s.RaiseError("error:%s", r.(error).Error())

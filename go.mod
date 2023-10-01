@@ -8,6 +8,7 @@ require (
 	github.com/chzyer/test v1.0.0
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
+	github.com/jmoiron/sqlx v1.3.5
 	github.com/yuin/gopher-lua v1.1.0
 )
 

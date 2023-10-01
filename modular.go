@@ -30,7 +30,7 @@ var (
 	//HelpFunc the help function name
 	HelpFunc = "help"
 	//HelpPrompt the prompt for no value supply for HelpCache
-	HelpPrompt       = "show HelpCache with those key word: "
+	HelpPrompt       = "show Help with those key word: "
 	HelpChunk        = `chunk(code,name string)(Chunk?,string?) ==> pre compile string into bytecode`
 	HelpHelp         = HelpFunc + `(topic string?)string? => fetch HelpCache of topic,'?' show topics,without topic show loadable modules`
 	HelpTopic        = `?,chunk`

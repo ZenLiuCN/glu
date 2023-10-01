@@ -35,7 +35,7 @@ var (
 		}
 	}
 	//OpPushUserData operator to push N UserDate
-	OpPushUserData = func(n ...interface{}) Operator {
+	OpPushUserData = func(n ...any) Operator {
 		return func(s *Vm) error {
 			for _, i := range n {
 				ud := s.NewUserData()
@@ -164,14 +164,14 @@ LTUserData: *LUserData
 
 LChannel: LChannel
 */
-func TableUnpack(s *LTable, noLua bool, history map[LValue]interface{}) (r map[interface{}]interface{}, keys []interface{}) {
+func TableUnpack(s *LTable, noLua bool, history map[LValue]any) (r map[any]any, keys []any) {
 	h := history
 	if h == nil {
-		h = make(map[LValue]interface{})
+		h = make(map[LValue]any)
 	}
-	r = make(map[interface{}]interface{})
+	r = make(map[any]any)
 	s.ForEach(func(key LValue, value LValue) {
-		var k interface{}
+		var k any
 		var ok bool
 		if k, ok = h[key]; !ok {
 			switch key.Type() {
@@ -213,7 +213,7 @@ func TableUnpack(s *LTable, noLua bool, history map[LValue]interface{}) (r map[i
 		if k == nil {
 			return
 		}
-		var val interface{}
+		var val any
 		keys = append(keys, k)
 		if val, ok = h[value]; !ok {
 			switch value.Type() {
@@ -312,8 +312,8 @@ func Failed(err error) {
 }
 
 var (
-	//ErrorSupress not raise error ,use for SafeFunc
-	ErrorSupress = errors.New("")
+	//ErrorSuppress not raise error ,use for SafeFunc
+	ErrorSuppress = errors.New("")
 )
 
 //SafeFunc no panic func
@@ -324,7 +324,7 @@ func SafeFunc(fn func(state *LState) int) LGFunction {
 
 				switch r.(type) {
 				case error:
-					if errors.Is(r.(error), ErrorSupress) {
+					if errors.Is(r.(error), ErrorSuppress) {
 						break
 					}
 					s.RaiseError("error:%s", r.(error).Error())
@@ -341,34 +341,34 @@ func SafeFunc(fn func(state *LState) int) LGFunction {
 }
 
 //SafeParam extra parameter must match type or panic,use with SafeFunc.
-func SafeParam(s *LState, start int, types ...LValueType) (r []interface{}) {
+func SafeParam(s *LState, start int, types ...LValueType) (r []any) {
 	for i, t := range types {
 		v := s.Get(i + start)
 		if v.Type() == t {
 			r = append(r, Raw(v))
 		}
 		s.TypeError(i+start, t)
-		panic(ErrorSupress)
+		panic(ErrorSuppress)
 	}
 	return
 }
 
 //SafeOpt opt param with SafeFunc
-func SafeOpt(s *LState, at int, t LValueType) interface{} {
+func SafeOpt(s *LState, at int, t LValueType) any {
 	if s.GetTop() >= at {
 		v := s.Get(at)
 		if v.Type() == t {
 			return Raw(v)
 		} else {
 			s.TypeError(at, t)
-			panic(ErrorSupress)
+			panic(ErrorSuppress)
 		}
 	}
 	return nil
 }
 
 //Raw extract raw LValue: nil bool float64 string *LUserData *LState *LTable *LChannel
-func Raw(v LValue) interface{} {
+func Raw(v LValue) any {
 	switch v.Type() {
 	case LTNil:
 		return nil
@@ -398,7 +398,7 @@ func Raw(v LValue) interface{} {
 //2. array, slice,map[string]any packed into LTable (the elements also packed)
 //
 //3. others are packed into LUserData
-func Pack(v interface{}, s *LState) LValue {
+func Pack(v any, s *LState) LValue {
 	switch v.(type) {
 	case nil:
 		return LNil
