@@ -1,44 +1,49 @@
 # GLU (glucose) - [gopher-lua](https://github.com/yuin/gopher-lua) module extensions
+
 ## Summary
+
 ### requires
- + go 1.17 (as gopher-lua required): `under branch g17 with uri "github.com/ZenLiuCN/glu"`
- + go 1.18 (with Generic): `current master with uri "github.com/ZenLiuCN/glu/v2"`
+
++ go 1.17 (as gopher-lua required): `under branch g17 with uri "github.com/ZenLiuCN/glu"`
++ go 1.18 (with Generic): `current master with uri "github.com/ZenLiuCN/glu/v2"`
 
 ## Packages
 
 1. √ `glu` the core module:
-   1. Define helper `Module` and `Type` for easier register user library and user type;
-   2. Define global LState pool for reuse;
-   3. Define Registry for `Modulars`, with optional auto-injection;
-   4. Support `Help(string?)` for help information;
+    1. Define helper `Module` and `Type` for easier register user library and user type;
+    2. Define global LState pool for reuse;
+    3. Define Registry for `Modulars`, with optional auto-injection;
+    4. Support `Help(string?)` for help information;
 2. √ `json` dynamic json library base on [Jeffail/gabs](https://github.com/Jeffail/gabs/v2)
 3. √ `http` http server and client library base on [gorilla/mux](https://github.com/gorilla/mux), depends on `json`
 4. √ `sqlx` sqlx base on [jmoiron/sqlx](https://github.com/jmoiron/sqlx), depends on `json`, new in version `v2.0.2`
 
 ## Samples
+
 1. use
 
 ```go
 package sample
 
 import (
-   "fmt"
-   "github.com/ZenLiuCN/glu/v2"
-   lua "github.com/yuin/gopher-lua"
+	"fmt"
+	"github.com/ZenLiuCN/glu/v2"
+	lua "github.com/yuin/gopher-lua"
 )
 
 func main() {
-   fmt.Println(DoSomeScript("1+2")==3.0)
+	fmt.Println(DoSomeScript("1+2") == 3.0)
 }
 func DoSomeScript(script string) float64 {
-   vm := glu.Get()
-   defer glu.Put(vm)
-   if err := vm.DoString(script); err != nil {
-      panic(err)
-   }
-   return float64(vm.Pop().(lua.LNumber))
+	vm := glu.Get()
+	defer glu.Put(vm)
+	if err := vm.DoString(script); err != nil {
+		panic(err)
+	}
+	return float64(vm.Pop().(lua.LNumber))
 }
 ```
+
 2. print help
    ```lua
       local http=require('http')
@@ -84,3 +89,11 @@ func DoSomeScript(script string) float64 {
 ## License
 
 MIT as gopher-lua did
+
+## Changes
+
+Those are record start at version `2.0.2`
+
+1. `v2.0.2` :
+    + add module `sqlx` with `sqlx.DB`,`sqlx.Result`
+    + add function `of(jsonString):Json` in module `json`
