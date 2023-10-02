@@ -97,3 +97,5 @@ Those are record start at version `2.0.2`
 1. `v2.0.2` :
     + add module `sqlx` with `sqlx.DB`,`sqlx.Result`
     + add function `of(jsonString):Json` in module `json`
+2. `v2.0.3` :
+   + adding `sqlx.Tx`,`sqlx.Stmt`,`sqlx.NamedStmt` to module `sqlx`
