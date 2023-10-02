@@ -117,6 +117,29 @@ func init() {
 				}
 				return 0
 			}).
+		AddMethodCast("get", `(key int|string)Json?  ==> fetch value at index for array or key for object.`,
+			func(s *LState, v *Container) int {
+				s.CheckTypes(2, LTString, LTNumber)
+				p := s.Get(2)
+				if p.Type() == LTString {
+					x := p.String()
+					if v.ExistsP(x) {
+						return JsonType.New(s, v.Path(x))
+					} else {
+						s.Push(LNil)
+						return 1
+					}
+				} else if p.Type() == LTNumber {
+					i := int(p.(LNumber))
+					x := v.Index(i)
+					if x == nil {
+						s.Push(LNil)
+						return 1
+					}
+					return JsonType.New(s, x)
+				}
+				return 0
+			}).
 		AddMethodCast("type", `()int  ==> fetch JSON type: 0 nil,1 string,2 number,3 boolean,4 array,5 object.`,
 			func(s *LState, v *Container) int {
 				if _, ok := v.Data().(string); ok {

@@ -55,7 +55,7 @@ func init() {
 			}
 			return db, true
 		}).
-		AddMethodCast(`query`, `query(string,Json?)json.Json =>query database`, func(s *lua.LState, data *sqlx.DB) int {
+		AddMethodCast(`query`, `query(string,Json?)Json =>query database`, func(s *lua.LState, data *sqlx.DB) int {
 			return Raise(s, func() int {
 				q, ok := CheckString(s, 2)
 				if !ok {
@@ -101,7 +101,7 @@ func init() {
 				return json.JsonType.New(s, rs)
 			})
 		}).
-		AddMethodCast(`exec`, `exec(string,Json?)sqlx.Result => exec SQL`, func(s *lua.LState, data *sqlx.DB) int {
+		AddMethodCast(`exec`, `exec(string,Json?)Result => exec SQL`, func(s *lua.LState, data *sqlx.DB) int {
 			q, ok := CheckString(s, 2)
 			if !ok {
 				return 0
@@ -134,6 +134,98 @@ func init() {
 			}
 			return SqlResultType.New(s, r)
 		}).
+		AddMethodCast(`queryMany`, `queryMany(string,Json)Json => query many from json array of named or array parameters`, func(s *lua.LState, data *sqlx.DB) int {
+			return Raise(s, func() int {
+				q, ok := CheckString(s, 2)
+				if !ok {
+					return 0
+				}
+				if s.GetTop() != 3 {
+					s.RaiseError("queries(SQL,array of object or array)")
+					return 0
+				}
+				if j, ok := json.JsonType.CastVar(s, 3); ok {
+					if i1, ok := j.Data().([]any); ok {
+						rs := Wrap(make([]any, 0, 1))
+						for iy, val := range i1 {
+							var err error
+							var r *sqlx.Rows
+							if m, ok := val.(map[string]any); ok {
+								r, err = data.NamedQuery(q, m)
+							} else if m, ok := val.([]any); ok {
+								r, err = data.Queryx(q, m...)
+							} else {
+								s.RaiseError("require json array of object or array which is not at %d", iy)
+								return 0
+							}
+
+							if err != nil {
+								s.RaiseError("process %d: %s", iy, err.Error())
+								return 0
+							}
+							for r.Next() {
+								m := make(map[string]any)
+								if err = r.MapScan(m); err != nil {
+									s.RaiseError(err.Error())
+									_ = r.Close()
+									return 0
+								}
+								if err = rs.ArrayAppend(m); err != nil {
+									s.RaiseError(err.Error())
+									_ = r.Close()
+									return 0
+								}
+							}
+							_ = r.Close()
+						}
+						return json.JsonType.New(s, rs)
+					}
+				}
+				s.ArgError(3, "must a json array of object or array")
+				return 0
+			})
+
+		}).
+		AddMethodCast(`execMany`, `execMany(string,Json)number => exec SQL with json array of named or array parameters`, func(s *lua.LState, data *sqlx.DB) int {
+			return Raise(s, func() int {
+				q, ok := CheckString(s, 2)
+				if !ok {
+					return 0
+				}
+				if s.GetTop() != 3 {
+					s.RaiseError("execs(SQL,JsonArrayOfNamedParameters)")
+					return 0
+				}
+				if j, ok := json.JsonType.CastVar(s, 3); ok {
+					if i1, ok := j.Data().([]any); ok {
+						n := int64(0)
+						tx := data.MustBegin()
+						for iy, val := range i1 {
+							var err error
+							var r sql.Result
+							if m, ok := val.(map[string]any); ok {
+								r, err = data.NamedExec(q, m)
+							} else if m, ok := val.([]any); ok {
+								r, err = data.Exec(q, m...)
+							} else {
+								s.RaiseError("require json array of object or array which is not at %d", iy)
+								return 0
+							}
+							if err != nil {
+								s.RaiseError("process %d: %s", iy, err.Error())
+								return 0
+							}
+							n += fn.Panic1(r.RowsAffected())
+						}
+						fn.Panic(tx.Commit())
+						s.Push(lua.LNumber(n))
+						return 1
+					}
+				}
+				s.ArgError(3, "must a json array of objects")
+				return 0
+			})
+		}).
 		AddMethodCast(`begin`, `begin()sqlx.Tx => begin transaction`, func(s *lua.LState, data *sqlx.DB) int {
 			tx, err := data.Beginx()
 			if err != nil {
@@ -142,7 +234,7 @@ func init() {
 			}
 			return SqlxTxType.New(s, tx)
 		}).
-		AddMethodCast(`prepare`, `prepare(string)sqlx.Stmt => prepare statement`, func(s *lua.LState, data *sqlx.DB) int {
+		AddMethodCast(`prepare`, `prepare(string)Stmt => prepare statement`, func(s *lua.LState, data *sqlx.DB) int {
 			stmt, err := data.Preparex(s.CheckString(2))
 			if err != nil {
 				s.RaiseError(err.Error())
@@ -150,7 +242,7 @@ func init() {
 			}
 			return SqlxStmtType.New(s, stmt)
 		}).
-		AddMethodCast(`prepareNamed`, `prepareNamed(string)sqlx.Stmt => prepare named statement`, func(s *lua.LState, data *sqlx.DB) int {
+		AddMethodCast(`prepareNamed`, `prepareNamed(string)NamedStmt => prepare named statement`, func(s *lua.LState, data *sqlx.DB) int {
 			stmt, err := data.PrepareNamed(s.CheckString(2))
 			if err != nil {
 				s.RaiseError(err.Error())
@@ -165,6 +257,7 @@ func init() {
 			}
 			return 0
 		})
+
 	SqlResultType = NewTypeCast[sql.Result](func(a any) (v sql.Result, ok bool) { v, ok = a.(sql.Result); return }, `Result`, `sql.Result wrap`, false, ``, nil).
 		AddMethodCast(`lastID`, `lastID()number => last inserted id or raise error`, func(s *lua.LState, data sql.Result) int {
 			v, err := data.LastInsertId()
@@ -184,21 +277,8 @@ func init() {
 			s.Push(lua.LNumber(v))
 			return 1
 		})
+
 	SqlxTxType = NewTypeCast(func(a any) (v *sqlx.Tx, ok bool) { v, ok = a.(*sqlx.Tx); return }, `Tx`, `sqlx.Tx wrapper`, false, `none`, nil).
-		AddMethodCast(`commit`, `commit()`, func(s *lua.LState, data *sqlx.Tx) int {
-			err := data.Commit()
-			if err != nil {
-				s.RaiseError(err.Error())
-			}
-			return 0
-		}).
-		AddMethodCast(`rollback`, `rollback()`, func(s *lua.LState, data *sqlx.Tx) int {
-			err := data.Rollback()
-			if err != nil {
-				s.RaiseError(err.Error())
-			}
-			return 0
-		}).
 		AddMethodCast(`exec`, `exec(string,Json?)sqlx.Result`, func(s *lua.LState, data *sqlx.Tx) int {
 			q, ok := CheckString(s, 2)
 			if !ok {
@@ -277,7 +357,119 @@ func init() {
 			}
 			return json.JsonType.New(s, rs)
 
+		}).
+		AddMethodCast(`queryMany`, `queryMany(string,Json)Json => query many from json array with named parameters`, func(s *lua.LState, data *sqlx.Tx) int {
+			return Raise(s, func() int {
+				q, ok := CheckString(s, 2)
+				if !ok {
+					return 0
+				}
+				if s.GetTop() != 3 {
+					s.RaiseError("queries(SQL,JsonArrayOfNamedParameters)")
+					return 0
+				}
+				if j, ok := json.JsonType.CastVar(s, 3); ok {
+					if i1, ok := j.Data().([]any); ok {
+						rs := Wrap(make([]any, 0, 1))
+						for iy, val := range i1 {
+							if m, ok := val.(map[string]any); !ok {
+								s.RaiseError("require json array of objects which is not at %d", iy)
+								return 0
+							} else {
+								r, err := data.NamedQuery(q, m)
+								if err != nil {
+									s.RaiseError("process %d: %s", iy, err.Error())
+									return 0
+								}
+								for r.Next() {
+									m := make(map[string]any)
+									if err = r.MapScan(m); err != nil {
+										s.RaiseError(err.Error())
+										_ = r.Close()
+										return 0
+									}
+									if err = rs.ArrayAppend(m); err != nil {
+										s.RaiseError(err.Error())
+										_ = r.Close()
+										return 0
+									}
+								}
+								_ = r.Close()
+							}
+						}
+						return json.JsonType.New(s, rs)
+					}
+				}
+				s.ArgError(3, "must a json array of objects")
+				return 0
+			})
+
+		}).
+		AddMethodCast(`execMany`, `execMany(string,Json)number => exec SQL with json array of named parameters`, func(s *lua.LState, data *sqlx.Tx) int {
+			return Raise(s, func() int {
+				q, ok := CheckString(s, 2)
+				if !ok {
+					return 0
+				}
+				if s.GetTop() != 3 {
+					s.RaiseError("execs(SQL,JsonArrayOfNamedParameters)")
+					return 0
+				}
+				if j, ok := json.JsonType.CastVar(s, 3); ok {
+					if i1, ok := j.Data().([]any); ok {
+						n := int64(0)
+						for iy, val := range i1 {
+							if m, ok := val.(map[string]any); !ok {
+								s.RaiseError("require json array of objects which is not at %d", iy)
+								return 0
+							} else {
+								r, err := data.NamedExec(q, m)
+								if err != nil {
+									s.RaiseError("process %d: %s", iy, err.Error())
+									return 0
+								}
+								n += fn.Panic1(r.RowsAffected())
+							}
+						}
+						s.Push(lua.LNumber(n))
+						return 1
+					}
+				}
+				s.ArgError(3, "must a json array of objects")
+				return 0
+			})
+		}).
+		AddMethodCast(`prepare`, `prepare(string)Stmt => prepare statement`, func(s *lua.LState, data *sqlx.Tx) int {
+			stmt, err := data.Preparex(s.CheckString(2))
+			if err != nil {
+				s.RaiseError(err.Error())
+				return 0
+			}
+			return SqlxStmtType.New(s, stmt)
+		}).
+		AddMethodCast(`prepareNamed`, `prepareNamed(string)NamedStmt => prepare named statement`, func(s *lua.LState, data *sqlx.Tx) int {
+			stmt, err := data.PrepareNamed(s.CheckString(2))
+			if err != nil {
+				s.RaiseError(err.Error())
+				return 0
+			}
+			return SqlxNamedStmtType.New(s, stmt)
+		}).
+		AddMethodCast(`commit`, `commit()`, func(s *lua.LState, data *sqlx.Tx) int {
+			err := data.Commit()
+			if err != nil {
+				s.RaiseError(err.Error())
+			}
+			return 0
+		}).
+		AddMethodCast(`rollback`, `rollback()`, func(s *lua.LState, data *sqlx.Tx) int {
+			err := data.Rollback()
+			if err != nil {
+				s.RaiseError(err.Error())
+			}
+			return 0
 		})
+
 	SqlxStmtType = NewTypeCast(func(a any) (v *sqlx.Stmt, ok bool) { v, ok = a.(*sqlx.Stmt); return }, `Stmt`, `sqlx.Stmt wrapper`, false, `none`, nil).
 		AddMethodCast(`query`, `query(Json?)Json => param must a json Array`, func(s *lua.LState, data *sqlx.Stmt) int {
 			return Raise(s, func() int {
@@ -347,7 +539,88 @@ func init() {
 				}
 				return SqlResultType.New(s, r)
 			})
+		}).
+		AddMethodCast(`queryMany`, `queryMany(Json)Json => query many from json array with parameters`, func(s *lua.LState, data *sqlx.Stmt) int {
+			return Raise(s, func() int {
+				if s.GetTop() != 2 {
+					s.RaiseError("queries(SQL,JsonArrayOfNamedParameters)")
+					return 0
+				}
+				if j, ok := json.JsonType.CastVar(s, 2); ok {
+					if i1, ok := j.Data().([]any); ok {
+						rs := Wrap(make([]any, 0, 1))
+						for iy, val := range i1 {
+							if m, ok := val.([]any); !ok {
+								s.RaiseError("require json array of array which is not at %d", iy)
+								return 0
+							} else {
+								r, err := data.Queryx(m...)
+								if err != nil {
+									s.RaiseError("process %d: %s", iy, err.Error())
+									return 0
+								}
+								for r.Next() {
+									m := make(map[string]any)
+									if err = r.MapScan(m); err != nil {
+										s.RaiseError(err.Error())
+										_ = r.Close()
+										return 0
+									}
+									if err = rs.ArrayAppend(m); err != nil {
+										s.RaiseError(err.Error())
+										_ = r.Close()
+										return 0
+									}
+								}
+								_ = r.Close()
+							}
+						}
+						return json.JsonType.New(s, rs)
+					}
+				}
+				s.ArgError(2, "must a json array of objects")
+				return 0
+			})
+
+		}).
+		AddMethodCast(`execMany`, `execMany(Json)number => exec SQL with json array of array parameters`, func(s *lua.LState, data *sqlx.Stmt) int {
+			return Raise(s, func() int {
+				if s.GetTop() != 2 {
+					s.RaiseError("execs(SQL,JsonArrayOfNamedParameters)")
+					return 0
+				}
+				if j, ok := json.JsonType.CastVar(s, 2); ok {
+					if i1, ok := j.Data().([]any); ok {
+						n := int64(0)
+						for iy, val := range i1 {
+							if m, ok := val.([]any); !ok {
+								s.RaiseError("require json array of array which is not at %d", iy)
+								return 0
+							} else {
+								r, err := data.Exec(m...)
+								if err != nil {
+									s.RaiseError("process %d: %s", iy, err.Error())
+									return 0
+								}
+								n += fn.Panic1(r.RowsAffected())
+							}
+						}
+						s.Push(lua.LNumber(n))
+						return 1
+					}
+				}
+				s.ArgError(3, "must a json array of objects")
+				return 0
+			})
+		}).
+		AddMethodCast(`close`, `close() => close statement`, func(s *lua.LState, data *sqlx.Stmt) int {
+			err := data.Close()
+			if err != nil {
+				s.RaiseError(`close database: %s`, err)
+			}
+			return 0
 		})
+
 	SqlxNamedStmtType = NewTypeCast(func(a any) (v *sqlx.NamedStmt, ok bool) { v, ok = a.(*sqlx.NamedStmt); return }, `NamedStmt`, `sqlx.NamedStmt wrapper`, false, `none`, nil).
 		AddMethodCast(`query`, `query(Json)Json => param must a json Object`, func(s *lua.LState, data *sqlx.NamedStmt) int {
 			return Raise(s, func() int {
@@ -411,6 +684,86 @@ func init() {
 				}
 				return SqlResultType.New(s, r)
 			})
+		}).
+		AddMethodCast(`queryMany`, `queryMany(Json)Json => query many from json array of named parameters`, func(s *lua.LState, data *sqlx.NamedStmt) int {
+			return Raise(s, func() int {
+				if s.GetTop() != 2 {
+					s.RaiseError("queries(SQL,JsonArrayOfNamedParameters)")
+					return 0
+				}
+				if j, ok := json.JsonType.CastVar(s, 2); ok {
+					if i1, ok := j.Data().([]any); ok {
+						rs := Wrap(make([]any, 0, 1))
+						for iy, val := range i1 {
+							if m, ok := val.(map[string]any); !ok {
+								s.RaiseError("require json array of objects which is not at %d", iy)
+								return 0
+							} else {
+								r, err := data.Queryx(m)
+								if err != nil {
+									s.RaiseError("process %d: %s", iy, err.Error())
+									return 0
+								}
+								for r.Next() {
+									m := make(map[string]any)
+									if err = r.MapScan(m); err != nil {
+										s.RaiseError(err.Error())
+										_ = r.Close()
+										return 0
+									}
+									if err = rs.ArrayAppend(m); err != nil {
+										s.RaiseError(err.Error())
+										_ = r.Close()
+										return 0
+									}
+								}
+								_ = r.Close()
+							}
+						}
+						return json.JsonType.New(s, rs)
+					}
+				}
+				s.ArgError(2, "must a json array of objects")
+				return 0
+			})
+
+		}).
+		AddMethodCast(`execMany`, `execMany(Json)number => exec SQL json array of named parameters`, func(s *lua.LState, data *sqlx.NamedStmt) int {
+			return Raise(s, func() int {
+				if s.GetTop() != 2 {
+					s.RaiseError("execs(SQL,JsonArrayOfNamedParameters)")
+					return 0
+				}
+				if j, ok := json.JsonType.CastVar(s, 2); ok {
+					if i1, ok := j.Data().([]any); ok {
+						n := int64(0)
+						for iy, val := range i1 {
+							if m, ok := val.(map[string]any); !ok {
+								s.RaiseError("require json array of objects which is not at %d", iy)
+								return 0
+							} else {
+								r, err := data.Exec(m)
+								if err != nil {
+									s.RaiseError("process %d: %s", iy, err.Error())
+									return 0
+								}
+								n += fn.Panic1(r.RowsAffected())
+							}
+						}
+						s.Push(lua.LNumber(n))
+						return 1
+					}
+				}
+				s.ArgError(3, "must a json array of objects")
+				return 0
+			})
+		}).
+		AddMethodCast(`close`, `close() => close statement`, func(s *lua.LState, data *sqlx.NamedStmt) int {
+			err := data.Close()
+			if err != nil {
+				s.RaiseError(`close database: %s`, err)
+			}
+			return 0
 		})
 
 	SqlxModule.AddModule(SqlxDBType)

@@ -99,3 +99,6 @@ Those are record start at version `2.0.2`
     + add function `of(jsonString):Json` in module `json`
 2. `v2.0.3` :
    + adding `sqlx.Tx`,`sqlx.Stmt`,`sqlx.NamedStmt` to module `sqlx`
+3. `v2.0.4` :
+   + add `Json:get(string|number)` to module `json`, which will replace `Json:at`
+   + add `x:execMany` and `x:queryMany` to module `sqlx`
