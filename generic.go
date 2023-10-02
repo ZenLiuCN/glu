@@ -152,7 +152,7 @@ func Raise(s *lua.LState, act func() int) (ret int) {
 		if r := recover(); r != nil {
 			switch er := r.(type) {
 			case error:
-				s.RaiseError(`failure: %s`, er)
+				s.RaiseError(er.Error())
 			case string:
 				s.RaiseError(`failure: %s`, er)
 			default:
