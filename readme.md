@@ -102,3 +102,5 @@ Those are record start at version `2.0.2`
 3. `v2.0.4` :
    + add `Json:get(string|number)` to module `json`, which will replace `Json:at`
    + add `x:execMany` and `x:queryMany` to module `sqlx`
+   + add `sqlx.encB64` and `sqlx.decB64` to module `sqlx` for [numeric issue](https://github.com/jmoiron/sqlx/issues/289)
+     + when use [pgx](https://github.com/jackc/pgx/) for postgresql there will no such needs.

@@ -148,9 +148,9 @@ func init() {
 					s.Push(LNumber(2))
 				} else if _, ok = v.Data().(bool); ok {
 					s.Push(LNumber(3))
-				} else if _, ok = v.Data().([]interface{}); ok {
+				} else if _, ok = v.Data().([]any); ok {
 					s.Push(LNumber(4))
-				} else if _, ok = v.Data().(map[string]interface{}); ok {
+				} else if _, ok = v.Data().(map[string]any); ok {
 					s.Push(LNumber(5))
 				} else {
 					s.Push(LNumber(0))
@@ -224,7 +224,7 @@ func init() {
 				}
 				var err error
 				if p == "" {
-					if m, ok := c.Data().(map[string]interface{}); ok && len(m) > 0 {
+					if m, ok := c.Data().(map[string]any); ok && len(m) > 0 {
 						s.Push(LString("value at path is object"))
 						return 1
 					} else if ok {
@@ -235,7 +235,7 @@ func init() {
 						}
 					}
 					if val == nil {
-						idx = len(c.Data().([]interface{})) - 1
+						idx = len(c.Data().([]any)) - 1
 						if idx < 0 {
 							return 0
 						}
@@ -258,18 +258,18 @@ func init() {
 						return 1
 					}
 					return 0
-				} else if m, ok := c.Path(p).Data().(map[string]interface{}); ok && len(m) > 0 {
+				} else if m, ok := c.Path(p).Data().(map[string]any); ok && len(m) > 0 {
 					s.Push(LString("value at path is object"))
 					return 1
 				} else if ok {
-					_, err = c.Set([]interface{}{}, p)
+					_, err = c.Set([]any{}, p)
 					if err != nil {
 						s.Push(LString("append value fail:" + err.Error()))
 						return 1
 					}
 				}
 				if val == nil {
-					idx = len(c.Path(p).Data().([]interface{})) - 1
+					idx = len(c.Path(p).Data().([]any)) - 1
 					if idx < 0 {
 						return 0
 					}
@@ -285,12 +285,11 @@ func init() {
 			}).
 		AddMethodCast("isArray", `(path string?)bool  ==> check if it's array at path.`,
 			func(s *LState, c *Container) int {
-
 				v, _ := checkPath(s, c, 0)
 				if v == nil {
 					s.Push(LFalse)
 				} else {
-					if _, ok := v.Data().([]interface{}); ok {
+					if _, ok := v.Data().([]any); ok {
 						s.Push(LTrue)
 					} else {
 						s.Push(LFalse)
@@ -303,7 +302,7 @@ func init() {
 				v, _ := checkPath(s, c, 0)
 				if v == nil {
 					s.Push(LFalse)
-				} else if _, ok := v.Data().(map[string]interface{}); ok {
+				} else if _, ok := v.Data().(map[string]any); ok {
 					s.Push(LTrue)
 				} else {
 					s.Push(LFalse)
@@ -331,6 +330,14 @@ func init() {
 				if v == nil {
 					s.Push(LNil)
 				} else if b, ok := v.Data().(string); !ok {
+					if _, ok := v.Data().([]byte); ok {
+						ts := v.String()
+						if len(ts) > 2 {
+							ts = ts[1 : len(ts)-1]
+						}
+						s.Push(LString(ts))
+						return 1
+					}
 					s.Push(LNil)
 				} else {
 					s.Push(LString(b))
@@ -352,9 +359,9 @@ func init() {
 		AddMethodCast("size", `(path string?)number?  ==> fetch  object size or array size else nil.`,
 			func(s *LState, c *Container) int {
 				v, _ := checkPath(s, c, 0)
-				if b, ok := v.Data().(map[string]interface{}); ok {
+				if b, ok := v.Data().(map[string]any); ok {
 					s.Push(LNumber(len(b)))
-				} else if a, ok := v.Data().([]interface{}); ok {
+				} else if a, ok := v.Data().([]any); ok {
 					s.Push(LNumber(len(a)))
 				} else if v == nil {
 					s.Push(LNil)
@@ -397,7 +404,7 @@ func init() {
 func parseTable(t *LTable, g *Container) *Container {
 	arr := t.MaxN() != 0 && t.MaxN() == t.Len()
 	if arr {
-		if _, ok := g.Data().(map[string]interface{}); ok {
+		if _, ok := g.Data().(map[string]any); ok {
 			_, err := g.Array()
 			if err != nil {
 				panic(err)
@@ -437,7 +444,7 @@ func parseTable(t *LTable, g *Container) *Container {
 	})
 	return g
 }
-func unpack(v LValue) (interface{}, bool) {
+func unpack(v LValue) (any, bool) {
 	switch v.Type() {
 	case LTString:
 		return v.String(), true

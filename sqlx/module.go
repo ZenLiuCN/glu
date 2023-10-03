@@ -2,6 +2,7 @@ package sqlx
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	. "github.com/Jeffail/gabs/v2"
 	"github.com/ZenLiuCN/fn"
@@ -37,6 +38,28 @@ func init() {
 				return 0
 			}
 			return SqlxDBType.New(s, db)
+		}).
+		AddFunc(`decB64`, `decB64(string)string => decode base64 to string`, func(s *lua.LState) int {
+			d := s.CheckString(1)
+			if d == "" {
+				return 0
+			}
+			b, err := base64.StdEncoding.DecodeString(d)
+			if err != nil {
+				s.RaiseError(err.Error())
+				return 0
+			}
+			s.Push(lua.LString(b))
+			return 1
+		}).
+		AddFunc(`encB64`, `encB64(string)string => encode string to base64 without padding`, func(s *lua.LState) int {
+			d := s.CheckString(1)
+			if d == "" {
+				return 0
+			}
+			b := base64.StdEncoding.EncodeToString([]byte(d))
+			s.Push(lua.LString(b))
+			return 1
 		})
 	SqlxDBType = NewTypeCast[*sqlx.DB](func(a any) (v *sqlx.DB, ok bool) { v, ok = a.(*sqlx.DB); return }, `DB`, `sqlx.DB wrapper`, false, `new(driver:string,dsn:string)sqlx.DB`,
 		func(s *lua.LState) (v *sqlx.DB, ok bool) {
