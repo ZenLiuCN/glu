@@ -60,6 +60,78 @@ func init() {
 			b := base64.StdEncoding.EncodeToString([]byte(d))
 			s.Push(lua.LString(b))
 			return 1
+		}).
+		AddFunc(`to_num`, `to_num(Json,string ...)Json => convert json array fields from base64 to numeric string`, func(s *lua.LState) int {
+			g, ok := json.JsonType.CastVar(s, 1)
+			if !ok {
+				return 0
+			}
+			if _, ok = g.Data().([]any); !ok {
+				s.RaiseError(`must a json array`)
+				return 0
+			}
+			n := s.GetTop() - 2
+			if n < 0 {
+				s.RaiseError(`must have field names`)
+				return 0
+			}
+			names := make([]string, 0, n)
+			for i := 0; i <= n; i++ {
+				sx := s.CheckString(i + 2)
+				if sx == "" {
+					return 0
+				}
+				names = append(names, sx)
+			}
+			size := fn.Panic1(g.ArrayCount())
+			for i := 0; i < size; i++ {
+				val := g.Index(i)
+				for _, name := range names {
+					v := val.Path(name)
+					if v != nil {
+						b64 := v.String()
+						b64 = b64[1 : len(b64)-1]
+						b64 = string(fn.Panic1(base64.StdEncoding.DecodeString(b64)))
+						fn.Panic1(val.Set(b64, name))
+					}
+				}
+			}
+			return json.JsonType.New(s, g)
+		}).
+		AddFunc(`from_num`, `from_num(Json,string ...)Json => convert json array fields from numeric string to base64`, func(s *lua.LState) int {
+			g, ok := json.JsonType.CastVar(s, 1)
+			if !ok {
+				return 0
+			}
+			if _, ok = g.Data().([]any); !ok {
+				s.RaiseError(`must a json array`)
+				return 0
+			}
+			n := s.GetTop() - 2
+			if n < 0 {
+				s.RaiseError(`must have field names`)
+				return 0
+			}
+			names := make([]string, 0, n)
+			for i := 0; i <= n; i++ {
+				sx := s.CheckString(i + 2)
+				if sx == "" {
+					return 0
+				}
+				names = append(names, sx)
+			}
+			size := fn.Panic1(g.ArrayCount())
+			for i := 0; i < size; i++ {
+				val := g.Index(i)
+				for _, name := range names {
+					v := val.Path(name)
+					if v != nil {
+						b64 := v.Data().(string)
+						fn.Panic1(val.Set(base64.StdEncoding.EncodeToString([]byte(b64)), name))
+					}
+				}
+			}
+			return json.JsonType.New(s, g)
 		})
 	SqlxDBType = NewTypeCast[*sqlx.DB](func(a any) (v *sqlx.DB, ok bool) { v, ok = a.(*sqlx.DB); return }, `DB`, `sqlx.DB wrapper`, false, `new(driver:string,dsn:string)sqlx.DB`,
 		func(s *lua.LState) (v *sqlx.DB, ok bool) {

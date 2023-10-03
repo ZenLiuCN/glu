@@ -104,3 +104,6 @@ Those are record start at version `2.0.2`
    + add `x:execMany` and `x:queryMany` to module `sqlx`
    + add `sqlx.encB64` and `sqlx.decB64` to module `sqlx` for [numeric issue](https://github.com/jmoiron/sqlx/issues/289)
      + when use [pgx](https://github.com/jackc/pgx/) for postgresql there will no such needs.
+4. `v2.0.5` :
+   + add `sqlx:to_num` and `sqlx:from_num` to module `sqlx`, which convert json array of objects numeric fields from|to binary
+   
