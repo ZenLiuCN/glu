@@ -8,7 +8,6 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -41,7 +40,7 @@ func (c *Ctx) Method() string {
 func (c *Ctx) Body() (*gabs.Container, error) {
 	b := c.Request.Body
 	defer b.Close()
-	buf, err := ioutil.ReadAll(b)
+	buf, err := io.ReadAll(b)
 	if err != nil {
 		return nil, err
 	}

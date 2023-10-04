@@ -48,10 +48,25 @@ func (c glu) PreLoad(l *LState) {
 			}
 			sub := new(strings.Builder)
 			sub.WriteString(HelpHelp)
-			sub.WriteString("\nExists loadable modules:\n")
-			l.G.Global.RawGetString("package").(*LTable).RawGetString("preload").(*LTable).ForEach(func(k LValue, _ LValue) {
-				sub.WriteString(k.String() + " module \n")
-			})
+			sub.WriteString("\nPreload modules:\n")
+			keys := make([]string, 0)
+			l.G.Global.
+				RawGetString("package").(*LTable).
+				RawGetString("preload").(*LTable).
+				ForEach(func(k LValue, _ LValue) {
+					sub.WriteString(k.String() + "\n")
+					keys = append(keys, k.String())
+				})
+			sub.WriteString("\nLoaded modules:\n")
+		out:
+			for name := range moduleNames {
+				for _, n := range keys {
+					if n == name {
+						continue out
+					}
+				}
+				sub.WriteString(name + "\n")
+			}
 			i := sub.String()
 			s.Push(LString(i))
 			c["mod"] = i

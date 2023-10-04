@@ -29,7 +29,7 @@ func (c *Client) Head(url string) (*http.Response, error) {
 func (c *Client) Form(url string, frm map[string][]string) (*http.Response, error) {
 	return c.Client.PostForm(url, frm)
 }
-func (c *Client) Do(method, url, data string, header map[string]string) (res *http.Response, err error) {
+func (c *Client) Request(method, url, data string, header map[string]string) (res *http.Response, err error) {
 	var req *http.Request
 	if data == "" {
 		req, err = http.NewRequest(method, url, nil)

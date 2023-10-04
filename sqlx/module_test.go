@@ -1,7 +1,7 @@
 package sqlx
 
 import (
-	. "github.com/ZenLiuCN/glu/v2"
+	. "github.com/ZenLiuCN/glu/v3"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/lib/pq"
@@ -9,14 +9,40 @@ import (
 	"testing"
 )
 
-func TestSqlx(t *testing.T) {
+func TestSqlxHelp(t *testing.T) {
 	if err := ExecuteCode(`print(help())`, 0, 0, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-
 	if err := ExecuteCode(`
-local json=require('json')
 local sqlx=require('sqlx')
+
+for word in string.gmatch(sqlx.help(), '([^,]+)') do
+	print(sqlx.help(word))
+end
+for word in string.gmatch(sqlx.DB.help(), '([^,]+)') do
+	print(sqlx.DB.help(word))
+end
+for word in string.gmatch(sqlx.Tx.help(), '([^,]+)') do
+	print(sqlx.Tx.help(word))
+end
+for word in string.gmatch(sqlx.Stmt.help(), '([^,]+)') do
+	print(sqlx.Stmt.help(word))
+end
+for word in string.gmatch(sqlx.NamedStmt.help(), '([^,]+)') do
+	print(sqlx.NamedStmt.help(word))
+end
+for word in string.gmatch(sqlx.Result.help(), '([^,]+)') do
+	print(sqlx.Result.help(word))
+end
+`, 0, 0, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+}
+func TestSqlx(t *testing.T) {
+	if err := ExecuteCode(`
+json=require "json"
+sqlx=require "sqlx"
+print(help())
 print(sqlx.help())
 print(sqlx.help('DB'))
 print(sqlx.DB.help())
@@ -26,7 +52,7 @@ print(db:exec('insert into SOME (ti) values(\'2023-10-01\')'):rows())
 print(db:exec('insert into SOME (ti) values(\'2023-10-02\')'):rows())
 print(db:exec('insert into SOME (ti) values(\'2023-10-03\')'):rows())
 print(db:query('select * from SOME '):json())
-print(db:query('select * from SOME where ti>=?',json.of('["2023-10-02"]')):json())
+print(db:query('select * from SOME where ti>=?',json.parse('["2023-10-02"]')):json())
 local tx=db:begin()
 print('inserted in tx ',tx:exec('insert into SOME (ti) values(\'2023-10-02\')'):rows())
 assert(tx:query('select * from SOME where ti=\'2023-10-02\''):size()==2)
@@ -35,8 +61,8 @@ print('rollback')
 assert(db:query('select * from SOME where ti=\'2023-10-02\''):size()==1)
 local tx=db:begin()
 print('new tx')
-print('inserts ',tx:execMany('insert into SOME(ti) values(:date)',json.of('[{"date":"2023-11-02"},{"date":"2023-11-03"}]')))
-print('queries ',tx:queryMany('select * from SOME where ti=:date',json.of('[{"date":"2023-11-02"},{"date":"2023-11-03"}]')):json())
+print('inserts ',tx:execMany('insert into SOME(ti) values(:date)',json.parse('[{"date":"2023-11-02"},{"date":"2023-11-03"}]')))
+print('queries ',tx:queryMany('select * from SOME where ti=:date',json.parse('[{"date":"2023-11-02"},{"date":"2023-11-03"}]')):json())
 tx:rollback()
 print('rollback')
 print(db:exec('create table if not exists "SOME1" (ti number)'):rows())

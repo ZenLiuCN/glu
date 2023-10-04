@@ -150,17 +150,16 @@ func helpOperatorReg(operators map[Operate]funcInfo, hasMethods bool, helps map[
 				panic(fmt.Errorf("unsupported operators of %d", op))
 			}
 			if info.Help != "" {
-				helps[name] = fmt.Sprintf("%s::%s %s\n", mod, sym, info.Help)
-				mh.WriteString(fmt.Sprintf("%s::%s %s\n", mod, sym, info.Help))
+				helps[name] = fmt.Sprintf("metatable %s:%s %s\n", mod, sym, info.Help)
+				mh.WriteString(fmt.Sprintf("metatable %s:%s %s\n", mod, sym, info.Help))
 				info.Help = ""
 			} else {
-				mh.WriteString(fmt.Sprintf("%s::%s\n", mod, sym))
+				mh.WriteString(fmt.Sprintf("metatable %s:%s\n", mod, sym))
 			}
 		}
-
 	}
 }
-func helpCtorReg[T any](ctor func(*lua.LState) (T, bool), ctor2 string, help map[string]string, mh *strings.Builder, name string) {
+func helpCtorReg[T any](ctor func(*lua.LState) (v T), ctor2 string, help map[string]string, mh *strings.Builder, name string) {
 	if ctor != nil {
 		if ctor2 != "" {
 			help["new"] = fmt.Sprintf("%s.new %s", name, ctor2)

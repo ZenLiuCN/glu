@@ -2,8 +2,8 @@
 // glu.Modular and gua.BaseType will inject mod.Help(name string?) method to output HelpCache information.
 // glu.Get: Pool function to get a lua.LState.
 // glu.Put: Pool function to return a lua.LState.
-// glu.registry: shared module registry.
-// glu.Auto: config for autoload modules in registry into lua.LState.
+// glu.modulars: shared module modulars.
+// glu.Auto: config for autoload modules in modulars into lua.LState.
 package glu
 
 import (
@@ -18,7 +18,7 @@ type (
 		//
 		// @name function name, must match lua limitation
 		//
-		// @HelpCache HelpCache string, if empty will generate just Module.Function as HelpCache
+		// @help help string, if empty will generate just Module.Function as help
 		//
 		// @fn the LGFunction
 		AddFunc(name string, help string, fn LGFunction) Module

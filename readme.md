@@ -20,14 +20,14 @@
 
 ## Samples
 
-1. use
+1. usage
 
 ```go
 package sample
 
 import (
 	"fmt"
-	"github.com/ZenLiuCN/glu/v2"
+	"github.com/ZenLiuCN/glu/v3"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -40,36 +40,38 @@ func DoSomeScript(script string) float64 {
 	if err := vm.DoString(script); err != nil {
 		panic(err)
 	}
-	return float64(vm.Pop().(lua.LNumber))
+	return float64(vm.CheckNumber(1))
 }
 ```
 
 2. print help
-   ```lua
-      local http=require('http')
-      local json=require('json')
-      print(json.Help()) --will print comma split keyword list
-      print(http.Help('?')) --will print module help
-      print(http.Server.Help('?')) --will print type constructor help
-      for word in string.gmatch(http.Server.Help(), '([^,]+)') do
-         print(http.Server.Help(word)) --will print method constructor help
-      end
-      print(http.Ctx.Help('?'))
-      for word in string.gmatch(http.Ctx.Help(), '([^,]+)') do
-         print(http.Ctx.Help(word))
-      end
-   ```
-3. http server
-   ```lua
+```lua
    local http=require('http')
-   local server=http.Server.new(':8081') --new Server with listen address
-   server:get('/',chunk([[                -- the handler is string lua script
-               local c=...                --only parameter is http.Ctx
-               c:sendString(c:query('p')) --query should legal JSON string
-           ]]))
-   server:start(false)
-   while (true) do	end
-   ```
+   local json=require('json')
+   print(json.help()) --will print comma split keyword list
+   print(http.help('?')) --will print module help
+   print(http.Server.help('?')) --will print type constructor help
+   for word in string.gmatch(http.Server.help(), '([^,]+)') do
+      print(http.Server.help(word)) --will print method constructor help
+   end
+   print(http.CTX.help('?'))
+   for word in string.gmatch(http.CTX.help(), '([^,]+)') do
+      print(http.CTX.Help(word))
+   end
+```
+
+3. http server
+```lua
+local http=require('http')
+local server=http.Server.new(':8081') --new Server with listen address
+function handle(c)
+ c:sendString(c:query('p'))
+end
+server:get('/',handle)
+server:start(false)
+while (true) do	end
+```
+
 4. http client
    ```lua
     local res,err=require('http').Client.new(5):get('http://github.com')
@@ -98,17 +100,16 @@ Those are record start at version `2.0.2`
     + add module `sqlx` with `sqlx.DB`,`sqlx.Result`
     + add function `of(jsonString):Json` in module `json`
 2. `v2.0.3` :
-   + adding `sqlx.Tx`,`sqlx.Stmt`,`sqlx.NamedStmt` to module `sqlx`
+    + adding `sqlx.Tx`,`sqlx.Stmt`,`sqlx.NamedStmt` to module `sqlx`
 3. `v2.0.4` :
-   + add `Json:get(string|number)` to module `json`, which will replace `Json:at`
-   + add `x:execMany` and `x:queryMany` to module `sqlx`
-   + add `sqlx.encB64` and `sqlx.decB64` to module `sqlx` for [numeric issue](https://github.com/jmoiron/sqlx/issues/289)
-     + when use [pgx](https://github.com/jackc/pgx/) for postgresql there will no such needs.
+    + add `Json:get(string|number)` to module `json`, which will replace `Json:at`
+    + add `x:execMany` and `x:queryMany` to module `sqlx`
+    + add `sqlx.encB64` and `sqlx.decB64` to module `sqlx`
+      for [numeric issue](https://github.com/jmoiron/sqlx/issues/289)
+        + when use [pgx](https://github.com/jackc/pgx/) for postgresql there will no such needs.
 4. `v2.0.5` :
-   + add `sqlx:to_num` and `sqlx:from_num` to module `sqlx`, which convert json array of objects numeric fields from|to binary
-5. `v2.0.6`:
-   + **change** `json.from` as `json.of`
-   + **change** `json.of(jsonString)` as `json.parse`
-   + **add** `json.stringify(Json)string`
-   + **remove** `Json:at` use `Json:get()` instead
+    + add `sqlx:to_num` and `sqlx:from_num` to module `sqlx`, which convert json array of objects numeric fields from|to
+      binary
+5. `v3.0.1`:
+    + simplify core api
    

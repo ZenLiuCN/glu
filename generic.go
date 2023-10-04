@@ -156,3 +156,23 @@ func Raise(s *lua.LState, act func() int) (ret int) {
 	}()
 	return act()
 }
+
+// RaiseLG recover panic and raise error with lua.LGFunction
+func RaiseLG(act lua.LGFunction) lua.LGFunction {
+	return func(s *lua.LState) (ret int) {
+		defer func() {
+			if r := recover(); r != nil {
+				switch er := r.(type) {
+				case error:
+					s.RaiseError(er.Error())
+				case string:
+					s.RaiseError(`%s`, er)
+				default:
+					s.RaiseError(`%s`, er)
+				}
+				ret = 0
+			}
+		}()
+		return act(s)
+	}
+}

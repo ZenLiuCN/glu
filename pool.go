@@ -39,7 +39,7 @@ func Put(s *Vm) {
 }
 
 var (
-	//Auto if true, will autoload modules in registry
+	//Auto if true, will autoload modules in modulars
 	Auto = true
 )
 
@@ -324,7 +324,7 @@ func (pl *VmPool) Put(L *Vm) {
 	pl.saved = append(pl.saved, l)
 }
 
-//Recycle the pool space to max size
+// Recycle the pool space to max size
 func (pl *VmPool) Recycle(max int) {
 	if len(pl.saved) > max {
 		pl.m.Lock()
@@ -346,7 +346,7 @@ func (pl *VmPool) Shutdown() {
 func configurer(l *LState) {
 	BaseMod.PreLoad(l)
 	if Auto {
-		for _, module := range registry {
+		for _, module := range modulars {
 			module.PreLoad(l)
 		}
 	}

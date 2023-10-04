@@ -6,20 +6,28 @@ import (
 	"testing"
 )
 
-func TestGenericMod(t *testing.T) {
-	mod := NewType[map[string]string]("textMap", `textMap module`, true, ``, func(state *lua.LState) (map[string]string, bool) {
+func init() {
+	mod := NewType[map[string]string]("map", `textMap module`, true, ``, func(state *lua.LState) map[string]string {
 		if state.GetTop() != 0 {
 			state.RaiseError("no argument wanted")
-			return nil, false
 		}
 		m := make(map[string]string)
-		return m, true
+		return m
 	})
 	fn.Panic(Register(mod))
+}
+func TestGenericMod(t *testing.T) {
+
 	v := Get()
 	defer v.Close()
-	v.DoString(`
-	t=require("textMap")
-	print(t.help())
+	err := v.DoString(`
+	print(help())
+	print(map.help())
+	res,info=pcall(map.new,1)
+	print(res)
+	print(info)
 `)
+	if err != nil {
+		t.Fatal(err)
+	}
 }

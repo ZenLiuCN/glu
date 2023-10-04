@@ -1,4 +1,4 @@
-module github.com/ZenLiuCN/glu/v2
+module github.com/ZenLiuCN/glu/v3
 
 go 1.18
 

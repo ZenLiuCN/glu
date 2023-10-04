@@ -1,7 +1,6 @@
 package glu
 
 import (
-	"errors"
 	"fmt"
 	. "github.com/yuin/gopher-lua"
 	"strings"
@@ -37,8 +36,8 @@ type Type[T any] interface {
 	New(l *LState, val T) int
 	// NewValue create new LValue
 	NewValue(l *LState, val T) *LUserData
-	// CanCast check the type can use cast (when construct with NewTypeCast)
-	CanCast() bool
+	// Cast check the type can use cast (when construct with NewTypeCast)
+	Cast() bool
 	// Check  cast value on stack (already have error processed)
 	Check(s *LState, n int) T
 	// CheckSelf  receiver on stack (already have error processed)
@@ -77,8 +76,7 @@ type BaseType[T any] struct {
 	Mod         *Mod
 	HelpCtor    string
 	caster      func(any) (T, bool)
-	defVal      T
-	constructor func(*LState) (T, bool) //Constructor for this BaseType , also can define other Constructor by add functions
+	constructor func(*LState) T //Constructor for this BaseType , also can define other Constructor by add functions
 	methods     map[string]funcInfo
 	fields      map[string]fieldInfo
 	operators   map[Operate]funcInfo
@@ -90,12 +88,12 @@ func NewSimpleType[T any](name string, help string, top bool) *BaseType[T] {
 }
 
 // NewType create new BaseType
-func NewType[T any](name string, help string, top bool, ctorHelp string, ctor func(*LState) (T, bool)) *BaseType[T] {
+func NewType[T any](name string, help string, top bool, ctorHelp string, ctor func(*LState) (v T)) *BaseType[T] {
 	return &BaseType[T]{Mod: &Mod{Name: name, Top: top, Help: help}, constructor: ctor, HelpCtor: ctorHelp}
 }
 
 // NewTypeCast create new BaseType with reflect Signature
-func NewTypeCast[T any](caster func(a any) (v T, ok bool), name string, help string, top bool, ctorHelp string, ctor func(s *LState) (v T, ok bool)) *BaseType[T] {
+func NewTypeCast[T any](caster func(a any) (v T, ok bool), name string, help string, top bool, ctorHelp string, ctor func(s *LState) (v T)) *BaseType[T] {
 	return &BaseType[T]{Mod: &Mod{Name: name, Top: top, Help: help}, caster: caster, constructor: ctor, HelpCtor: ctorHelp}
 }
 
@@ -230,7 +228,6 @@ func (m *BaseType[T]) getOrBuildMeta(l *LState) *LTable {
 		}
 		// methods
 		mt.RawSetString("__index", l.SetFuncs(l.NewTable(), method))
-		//l.SetField(mt, "__index", l.SetFuncs(l.NewTable(), method))
 	}
 	if len(m.operators) > 0 {
 		for op, info := range m.operators {
@@ -276,7 +273,6 @@ func (m *BaseType[T]) getOrBuildMeta(l *LState) *LTable {
 			}
 			l.SetField(mt, name, l.NewFunction(info.Func))
 		}
-
 	}
 	if len(m.Mod.HelpCache) > 0 {
 		fn[HelpFunc] = helpFn(m.Mod.HelpCache)
@@ -306,27 +302,7 @@ func (m BaseType[T]) NewValue(l *LState, val T) *LUserData {
 
 // new internal creator
 func (m BaseType[T]) new(s *LState) (n int) {
-	defer func() {
-		if r := recover(); r != nil {
-
-			switch r.(type) {
-			case error:
-				if errors.Is(r.(error), ErrorSuppress) {
-					break
-				}
-				s.RaiseError("error:%s", r.(error).Error())
-			case string:
-				s.RaiseError("error:%s", r.(string))
-			default:
-				s.RaiseError("error:%#v", r)
-			}
-			n = 0
-		}
-	}()
-	val, ok := m.constructor(s)
-	if !ok {
-		return 0
-	}
+	val := m.constructor(s)
 	ud := s.NewUserData()
 	ud.Value = val
 	s.SetMetatable(ud, s.GetTypeMetatable(m.Mod.Name))
@@ -334,14 +310,13 @@ func (m BaseType[T]) new(s *LState) (n int) {
 	return 1
 }
 
-// CanCast check the type can use cast (when construct with NewTypeCast)
-func (m BaseType[T]) CanCast() bool {
+// Cast check the type can use cast (when construct with NewTypeCast)
+func (m BaseType[T]) Cast() bool {
 	return m.caster != nil
 }
 
 // Check  cast value on stack
 func (m BaseType[T]) Check(s *LState, n int) T {
-
 	v, ok := m.caster(s.CheckUserData(n).Value)
 	if !ok {
 		s.ArgError(n, "require type "+m.Mod.Name)
@@ -378,34 +353,6 @@ func (m *BaseType[T]) AddMethod(name string, help string, value LGFunction) Type
 	return m
 }
 
-// AddMethodUserData add method to this type which means instance method, with auto extract first argument.
-func (m *BaseType[T]) AddMethodUserData(name string, help string, act func(s *LState, data *LUserData) int) Type[T] {
-	return m.AddMethod(name, help, func(s *LState) int {
-		defer func() {
-			if r := recover(); r == nil {
-				s.Pop(1)
-			} else {
-				panic(r)
-			}
-		}()
-		u := s.CheckUserData(1)
-		if u == nil {
-			return 0
-		}
-		return act(s, u)
-	})
-}
-
-// AddMethodCast prechecked type (only create with NewTypeCast).
-func (m *BaseType[T]) AddMethodCast(name string, help string, act func(s *LState, data T) int) Type[T] {
-	if !m.CanCast() {
-		panic("can't use AddMethodCast for not create with NewTypeCast")
-	}
-	return m.AddMethod(name, help, func(s *LState) int {
-		return act(s, m.CheckSelf(s))
-	})
-}
-
 // Override operators an operator
 func (m *BaseType[T]) Override(op Operate, help string, fn LGFunction) Type[T] {
 	if m.operators == nil {
@@ -415,6 +362,17 @@ func (m *BaseType[T]) Override(op Operate, help string, fn LGFunction) Type[T] {
 	}
 	m.operators[op] = funcInfo{help, fn}
 	return m
+}
+
+// AddMethodUserData add method to this type which means instance method, with auto extract first argument.
+func (m *BaseType[T]) AddMethodUserData(name string, help string, act func(s *LState, data *LUserData) int) Type[T] {
+	return m.AddMethod(name, help, func(s *LState) int {
+		u := s.CheckUserData(1)
+		if u == nil {
+			return 0
+		}
+		return act(s, u)
+	})
 }
 
 // OverrideUserData see Override and AddMethodUserData
@@ -428,9 +386,19 @@ func (m *BaseType[T]) OverrideUserData(op Operate, help string, act func(s *LSta
 	})
 }
 
+// AddMethodCast prechecked type (only create with NewTypeCast).
+func (m *BaseType[T]) AddMethodCast(name string, help string, act func(s *LState, data T) int) Type[T] {
+	if !m.Cast() {
+		panic("can't use AddMethodCast for not create with NewTypeCast")
+	}
+	return m.AddMethod(name, help, func(s *LState) int {
+		return act(s, m.CheckSelf(s))
+	})
+}
+
 // OverrideCast see Override and AddMethodCast
 func (m *BaseType[T]) OverrideCast(op Operate, help string, act func(s *LState, data T) int) Type[T] {
-	if !m.CanCast() {
+	if !m.Cast() {
 		panic("can't use OverrideCast for not create with NewTypeCast")
 	}
 	return m.Override(op, help, func(s *LState) int {

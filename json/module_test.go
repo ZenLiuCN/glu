@@ -1,7 +1,7 @@
 package json
 
 import (
-	. "github.com/ZenLiuCN/glu/v2"
+	. "github.com/ZenLiuCN/glu/v3"
 	"testing"
 )
 
@@ -14,8 +14,8 @@ local json=require('json')
 for word in string.gmatch(json.help(), '([^,]+)') do
 	print(json.help(word))
 end
-for word in string.gmatch(json.Json.help(), '([^,]+)') do
-	print(json.Json.help(word))
+for word in string.gmatch(json.JSON.help(), '([^,]+)') do
+	print(json.JSON.help(word))
 end
 `, 0, 0, nil, nil); err != nil {
 		t.Fatal(err)

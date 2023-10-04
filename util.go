@@ -100,6 +100,25 @@ func ExecuteChunk(code *FunctionProto, argN, retN int, before Operator, after Op
 	return nil
 }
 
+func ExecuteFunction(fn *LFunction, argN, retN int, before Operator, after Operator) (err error) {
+	s := Get()
+	defer Put(s)
+	s.Push(fn)
+	if before != nil {
+		if err = before(s); err != nil {
+			return err
+		}
+	}
+	err = s.PCall(argN, retN, nil)
+	if err != nil {
+		return err
+	}
+	if after != nil {
+		return after(s)
+	}
+	return nil
+}
+
 // ExecuteCode run code in LState, use before to push args, after to extract return value
 func ExecuteCode(code string, argsN, retN int, before Operator, after Operator) error {
 	s := Get()

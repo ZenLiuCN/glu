@@ -4,13 +4,13 @@ import (
 	"fmt"
 	. "github.com/Jeffail/gabs/v2"
 	"github.com/ZenLiuCN/fn"
-	. "github.com/ZenLiuCN/glu/v2"
+	. "github.com/ZenLiuCN/glu/v3"
 	. "github.com/yuin/gopher-lua"
 )
 
 var (
-	JsonType   Type[*Container]
-	JsonModule Module
+	JSON   Type[*Container]
+	MODULE Module
 )
 
 func init() {
@@ -32,8 +32,8 @@ func init() {
 		}
 		return nil, ""
 	}
-	JsonModule = NewModule("json", `json is wrap of jeffail/gabs as dynamic json tool.`, true).
-		AddFunc("of", `(val table|number|string|boolean)Json ==> create json from value`,
+	MODULE = NewModule("json", `json is wrap of jeffail/gabs as dynamic json tool.`, true).
+		AddFunc("of", `(table|number|string|boolean)JSON 	 create json from value`,
 			func(s *LState) int {
 				s.CheckTypes(1, LTString, LTNumber, LTBool, LTTable)
 				v := s.Get(1)
@@ -41,53 +41,49 @@ func init() {
 				case LTString:
 					g := New()
 					_, _ = g.Set(s.ToString(1))
-					return JsonType.New(s, g)
+					return JSON.New(s, g)
 				case LTNumber:
 					g := New()
 					_, _ = g.Set(float64(s.ToNumber(1)))
-					return JsonType.New(s, g)
+					return JSON.New(s, g)
 				case LTBool:
 					g := New()
 					_, _ = g.Set(s.ToBool(1))
-					return JsonType.New(s, g)
+					return JSON.New(s, g)
 				case LTTable:
-					return JsonType.New(s, parseTable(s.ToTable(1), New()))
+					return JSON.New(s, parseTable(s.ToTable(1), New()))
 				default:
 					s.ArgError(1, "invalid")
 					return 0
 				}
 			}).
-		AddFunc("stringify", `stringify(Json)string => convert json to string`,
+		AddFunc("stringify", `stringify(JSON)string => convert json to string`,
 			func(s *LState) int {
-				v, ok := JsonType.CastVar(s, 1)
-				if !ok {
-					return 0
-				}
+				v := JSON.Check(s, 1)
+
 				s.Push(LString(v.String()))
 				return 1
 			}).
-		AddFunc("parse", `(string)Json ==> create json from value`,
+		AddFunc("parse", `(string)JSON 	 create json from value`,
 			func(s *LState) int {
 				v := s.CheckString(1)
 				g := fn.Panic1(ParseJSON([]byte(v)))
-				return JsonType.New(s, g)
+				return JSON.New(s, g)
 			})
-	JsonType = NewTypeCast(func(a any) (v *Container, ok bool) { v, ok = a.(*Container); return }, "Json", `JSON object`, false, `(json string?)Json? ==> create Json instance.`,
-		func(s *LState) (*Container, bool) {
+	JSON = NewTypeCast(func(a any) (v *Container, ok bool) { v, ok = a.(*Container); return }, "JSON", `json.JSON`, false, `(json string?)JSON? 	 create JSON instance.`,
+		func(s *LState) *Container {
 			if s.GetTop() == 1 {
 				v, err := ParseJSON([]byte(s.CheckString(1)))
 				if err != nil {
 					s.ArgError(1, "invalid JSON string")
-					return nil, false
 				}
-				return v, true
+				return v
 			} else if s.GetTop() != 0 {
-				s.RaiseError("bad argument for create json.Json")
-				return nil, false
+				s.RaiseError("bad argument for create JSON")
 			}
-			return New(), true
+			return New()
 		}).
-		AddMethodCast("json", `(pretty boolean=false,ident string='\t')string ==> json string of the Json, if empty will be '{}'.`,
+		AddMethodCast("json", `(pretty boolean=false,ident string='\t')string 	 json string of the JSON, if empty will be '{}'.`,
 			func(s *LState, v *Container) int {
 				if s.GetTop() >= 2 {
 					s.CheckType(2, LTBool)
@@ -104,29 +100,29 @@ func init() {
 				s.Push(LString(v.String()))
 				return 1
 			}).
-		AddMethodCast("path", `(path string?)Json?  ==> fetch Json by path, path is gabs path.`,
+		AddMethodCast("path", `(path string?)JSON?  	 fetch JSON by path, path is gabs path.`,
 			func(s *LState, v *Container) int {
 				p := s.CheckString(2)
 				if v.ExistsP(p) {
-					return JsonType.New(s, v.Path(p))
+					return JSON.New(s, v.Path(p))
 				}
 				s.Push(LNil)
 				return 1
 			}).
-		AddMethodCast("exists", `(path string?)boolean  ==> check existence of path.`,
+		AddMethodCast("exists", `(path string?)boolean  	 check existence of path.`,
 			func(s *LState, v *Container) int {
 				p, _ := checkPath(s, v, 0)
 				s.Push(LBool(p != nil))
 				return 1
 			}).
-		AddMethodCast("get", `(key int|string)Json?  ==> fetch value at index for array or key for object.`,
+		AddMethodCast("get", `(key int|string)JSON?  	 fetch value at index for array or key for object.`,
 			func(s *LState, v *Container) int {
 				s.CheckTypes(2, LTString, LTNumber)
 				p := s.Get(2)
 				if p.Type() == LTString {
 					x := p.String()
 					if v.ExistsP(x) {
-						return JsonType.New(s, v.Path(x))
+						return JSON.New(s, v.Path(x))
 					} else {
 						s.Push(LNil)
 						return 1
@@ -138,11 +134,11 @@ func init() {
 						s.Push(LNil)
 						return 1
 					}
-					return JsonType.New(s, x)
+					return JSON.New(s, x)
 				}
 				return 0
 			}).
-		AddMethodCast("type", `()int  ==> fetch JSON type: 0 nil,1 string,2 number,3 boolean,4 array,5 object.`,
+		AddMethodCast("type", `()int  	 fetch JSON type: 0 nil,1 string,2 number,3 boolean,4 array,5 object.`,
 			func(s *LState, v *Container) int {
 				if _, ok := v.Data().(string); ok {
 					s.Push(LNumber(1))
@@ -159,7 +155,7 @@ func init() {
 				}
 				return 1
 			}).
-		AddMethodCast("set", `(path string?, json JSON|string|number|bool|nil)string?  ==> set value at path.if value is nil,will delete it.this can't append array.'`,
+		AddMethodCast("set", `(path string?, json JSON|string|number|bool|nil)string?  	 set value at path.if value is nil,will delete it.this can't append array.'`,
 			func(s *LState, v *Container) int {
 				idx := 2
 				p := ""
@@ -206,7 +202,7 @@ func init() {
 				}
 				return 0
 			}).
-		AddMethodCast("append", `(path string?, json JSON|string|number|bool|nil)string?  ==> append value, path must pointer to array.`,
+		AddMethodCast("append", `(path string?, json JSON|string|number|bool|nil)string?  	 append value, path must pointer to array.`,
 			func(s *LState, c *Container) int {
 				_, p := checkPath(s, c, 1)
 				var idx int
@@ -285,7 +281,7 @@ func init() {
 				}
 				return 0
 			}).
-		AddMethodCast("isArray", `(path string?)bool  ==> check if it's array at path.`,
+		AddMethodCast("isArray", `(path string?)bool  	 check if it's array at path.`,
 			func(s *LState, c *Container) int {
 				v, _ := checkPath(s, c, 0)
 				if v == nil {
@@ -299,7 +295,7 @@ func init() {
 				}
 				return 1
 			}).
-		AddMethodCast("isObject", `(path string?)bool  ==> check if it's object at path.`,
+		AddMethodCast("isObject", `(path string?)bool  	 check if it's object at path.`,
 			func(s *LState, c *Container) int {
 				v, _ := checkPath(s, c, 0)
 				if v == nil {
@@ -312,7 +308,7 @@ func init() {
 
 				return 1
 			}).
-		AddMethodCast("bool", `(path string?)bool  ==> fetch value as boolean, if not exists return false.`,
+		AddMethodCast("bool", `(path string?)bool  	 fetch value as boolean, if not exists return false.`,
 			func(s *LState, c *Container) int {
 				v, _ := checkPath(s, c, 0)
 				if v == nil {
@@ -326,7 +322,7 @@ func init() {
 				}
 				return 1
 			}).
-		AddMethodCast("string", `(path string?)string?  ==> fetch value as string, if not exists or not string return nil.`,
+		AddMethodCast("string", `(path string?)string?  	 fetch value as string, if not exists or not string return nil.`,
 			func(s *LState, c *Container) int {
 				v, _ := checkPath(s, c, 0)
 				if v == nil {
@@ -346,7 +342,7 @@ func init() {
 				}
 				return 1
 			}).
-		AddMethodCast("number", `(path string?)number?  ==> fetch value as number, if not exists return nil.`,
+		AddMethodCast("number", `(path string?)number?  	 fetch value as number, if not exists return nil.`,
 			func(s *LState, c *Container) int {
 				v, _ := checkPath(s, c, 0)
 				if v == nil {
@@ -358,7 +354,7 @@ func init() {
 				}
 				return 1
 			}).
-		AddMethodCast("size", `(path string?)number?  ==> fetch  object size or array size else nil.`,
+		AddMethodCast("size", `(path string?)number?  	 fetch  object size or array size else nil.`,
 			func(s *LState, c *Container) int {
 				v, _ := checkPath(s, c, 0)
 				if b, ok := v.Data().(map[string]any); ok {
@@ -372,12 +368,12 @@ func init() {
 				}
 				return 1
 			}).
-		OverrideCast(OPERATE_TO_STRING, `Json:json()`, func(s *LState, i *Container) int {
+		OverrideCast(OPERATE_TO_STRING, `same as JSON:json()`, func(s *LState, i *Container) int {
 			s.Push(LString(i.String()))
 			return 1
 		})
 
-	fn.Panic(Register(JsonModule.AddModule(JsonType)))
+	fn.Panic(Register(MODULE.AddModule(JSON)))
 
 }
 func parseTable(t *LTable, g *Container) *Container {

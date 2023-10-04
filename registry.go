@@ -1,23 +1,23 @@
 package glu
 
 var (
-	registry []Modular
-	names    map[string]struct{}
-	// ExistNode is placeholder for a map set
-	ExistNode = struct{}{}
+	modulars    []Modular
+	moduleNames map[string]struct{}
+	// holder is placeholder for a map set
+	holder = struct{}{}
 )
 
 // Register modular into registry
 func Register(m ...Modular) (err error) {
-	if names == nil {
-		names = make(map[string]struct{}, 8)
+	if moduleNames == nil {
+		moduleNames = make(map[string]struct{}, 8)
 	}
 	for _, mod := range m {
-		if v, ok := names[mod.GetName()]; ok && v == ExistNode {
+		if v, ok := moduleNames[mod.GetName()]; ok && v == holder {
 			return ErrAlreadyExists
 		}
-		registry = append(registry, mod)
-		names[mod.GetName()] = ExistNode
+		modulars = append(modulars, mod)
+		moduleNames[mod.GetName()] = holder
 	}
 	return
 }

@@ -1,7 +1,7 @@
 package http
 
 import (
-	"github.com/ZenLiuCN/glu/v2"
+	"github.com/ZenLiuCN/glu/v3"
 	"net/http"
 	"net/url"
 	"testing"
@@ -20,7 +20,9 @@ func init() {
 	}()
 }
 func TestNewClient(t *testing.T) {
-	if err := glu.ExecuteCode(`
+	if err := glu.ExecuteCode(
+		//language=lua
+		`
 	local res,err=require('http').Client.new(5):get('http://127.0.0.1')
 	if err==nil then
 		local txt=res:body()
@@ -59,19 +61,19 @@ func TestClient_Head(t *testing.T) {
 	}
 }
 func TestClient_Do(t *testing.T) {
-	_, err := NewClient(time.Second).Do("HEAD", "http://127.0.0.1", "", nil)
+	_, err := NewClient(time.Second).Request("HEAD", "http://127.0.0.1", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 func TestClient_DoWithData(t *testing.T) {
-	_, err := NewClient(time.Second).Do("HEAD", "http://127.0.0.1", "123", nil)
+	_, err := NewClient(time.Second).Request("HEAD", "http://127.0.0.1", "123", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 func TestClient_DoWithHeader(t *testing.T) {
-	_, err := NewClient(time.Second).Do("HEAD", "http://127.0.0.1", "123", map[string]string{
+	_, err := NewClient(time.Second).Request("HEAD", "http://127.0.0.1", "123", map[string]string{
 		"content-type": "text/plain",
 	})
 	if err != nil {
@@ -79,11 +81,11 @@ func TestClient_DoWithHeader(t *testing.T) {
 	}
 }
 func TestClient_DoInvalidMethod(t *testing.T) {
-	_, err := NewClient(time.Second).Do("中", "http://127.0.0.1", "", nil)
+	_, err := NewClient(time.Second).Request("中", "http://127.0.0.1", "", nil)
 	if err == nil {
 		t.Fatal()
 	}
-	_, err = NewClient(time.Second).Do("中", "http://127.0.0.1", "123", nil)
+	_, err = NewClient(time.Second).Request("中", "http://127.0.0.1", "123", nil)
 	if err == nil {
 		t.Fatal()
 	}

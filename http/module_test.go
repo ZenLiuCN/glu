@@ -2,9 +2,9 @@ package http
 
 import (
 	"bytes"
-	"github.com/ZenLiuCN/glu/v2"
+	"github.com/ZenLiuCN/glu/v3"
 	"github.com/yuin/gopher-lua"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -13,7 +13,9 @@ import (
 )
 
 func TestModuleHelp(t *testing.T) {
-	if err := glu.ExecuteCode(`
+	if err := glu.ExecuteCode(
+		//language=lua
+		`
 		local http=require('http')
 		local json=require('json')
 		print(http.help('?'))
@@ -21,9 +23,9 @@ func TestModuleHelp(t *testing.T) {
 		for word in string.gmatch(http.Server.help(), '([^,]+)') do
 			print(http.Server.help(word))
 		end
-		print(http.Ctx.help('?'))
-		for word in string.gmatch(http.Ctx.help(), '([^,]+)') do
-			print(http.Ctx.help(word))
+		print(http.CTX.help('?'))
+		for word in string.gmatch(http.CTX.help(), '([^,]+)') do
+			print(http.CTX.help(word))
 		end
 	`, 0, 0, nil, nil); err != nil {
 		t.Fatal(err)
@@ -100,44 +102,75 @@ func TestModuleToMap(t *testing.T) {
 func TestModuleExecuteHandler(t *testing.T) {
 	s := glu.Get()
 	defer glu.Put(s)
-	c, err := glu.CompileChunk(`local a=... assert(a:header('1')~=nil)`, ``)
+	err := s.DoString(
+		//language=lua
+		`
+function x(a) 
+	assert(a:header('1')~=nil)
+	print('call 01')
+	print('header:',a:header('1'))
+end 
+return x`)
 	if err != nil {
 		t.Fatal(err)
 	}
+	fn := s.Get(1).(*lua.LFunction)
+	s.Pop(1)
 	x := &Ctx{
-		Request: &http.Request{},
+		Request: &http.Request{
+			Header: make(http.Header),
+		},
 	}
-	executeHandler(c, x)
-	c, err = glu.CompileChunk(`local a=... assert(a:header('1')==nil)`, ``)
+	x.Request.Header["1"] = []string{"1", "2"}
+	executeHandler(fn, x)
+	err = s.DoString(
+		//language=lua
+		`
+function x(a) 
+	print('call 02')
+	assert(a:header('1')==nil)
+end 
+return x`)
 	if err != nil {
 		t.Fatal(err)
 	}
+	fn = s.Get(1).(*lua.LFunction)
+	s.Pop(1)
+	t.Log("test fn2")
 	defer func() {
 		r := recover()
 		if r == nil {
-			t.Fatal()
+			t.Fatal("should have error")
+		} else {
+			t.Log(r)
 		}
 	}()
-	executeHandler(c, x)
+	executeHandler(fn, x)
 }
 func TestModuleCtx(t *testing.T) {
 	s := glu.Get()
 	defer glu.Put(s)
-	c, err := glu.CompileChunk(`
-local a=... 
-assert(a:header('1')=='')
-assert(a:header('a')=='b')
-assert(a:vars('a')=='')
-assert(a:query('p')=='1')
-assert(a:method()=='PUT')
-assert(a:body():json()=='{}')
-a:setHeader('v','a')
-a:setStatus(500)
-a:sendString("1")
-`, `test handler`)
+	err := s.DoString(
+		//language=lua
+		`
+function x(a)
+		assert(a:header('1')=='')
+		assert(a:header('a')=='b')
+		assert(a:vars('a')=='')
+		assert(a:query('p')=='1')
+		assert(a:method()=='PUT')
+		assert(a:body():json()=='{"1":2}')
+		a:setHeader('v','a')
+		a:status(500)
+		a:sendString("1")
+end
+return x
+`)
 	if err != nil {
 		t.Fatal(err)
 	}
+	c := s.Get(1).(*lua.LFunction)
+	s.Pop(1)
 	i, _ := url.Parse("http://127.0.0.1/p?p=1")
 	x := &Ctx{
 		Request: &http.Request{
@@ -146,7 +179,7 @@ a:sendString("1")
 			},
 			Method: http.MethodPut,
 			URL:    i,
-			Body:   ioutil.NopCloser(strings.NewReader(`{}`)),
+			Body:   io.NopCloser(strings.NewReader(`{"1":2}`)),
 		},
 		ResponseWriter: new(httptest.ResponseRecorder),
 	}
@@ -173,7 +206,7 @@ func TestModuleRes(t *testing.T) {
 		ProtoMajor:       0,
 		ProtoMinor:       0,
 		Header:           map[string][]string{"V": {"1"}},
-		Body:             ioutil.NopCloser(bytes.NewReader([]byte(`{"a":1}`))),
+		Body:             io.NopCloser(bytes.NewReader([]byte(`{"a":1}`))),
 		ContentLength:    100,
 		TransferEncoding: nil,
 		Close:            false,
@@ -192,7 +225,7 @@ assert(a:size()==100)
 assert(a:header()['V']=="1")
 assert(a:bodyJson():json()=='{"a":1}')
 `, 1, 0, func(s *glu.Vm) error {
-		s.Push(ResType.NewValue(s.LState, r))
+		s.Push(RESPONSE.NewValue(s.LState, r))
 		return nil
 	}, nil)
 	if err != nil {
@@ -205,7 +238,7 @@ assert(a:bodyJson():json()=='{"a":1}')
 		ProtoMajor:       0,
 		ProtoMinor:       0,
 		Header:           map[string][]string{"V": {"1"}},
-		Body:             ioutil.NopCloser(bytes.NewReader([]byte(`{"a":1}`))),
+		Body:             io.NopCloser(bytes.NewReader([]byte(`{"a":1}`))),
 		ContentLength:    100,
 		TransferEncoding: nil,
 		Close:            false,
@@ -218,7 +251,7 @@ assert(a:bodyJson():json()=='{"a":1}')
 local a=... 
 assert(a:body()=='{"a":1}')
 `, 1, 0, func(s *glu.Vm) error {
-		s.Push(ResType.NewValue(s.LState, r))
+		s.Push(RESPONSE.NewValue(s.LState, r))
 		return nil
 	}, nil)
 	if err != nil {
