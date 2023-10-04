@@ -3,6 +3,7 @@ package json
 import (
 	"fmt"
 	. "github.com/Jeffail/gabs/v2"
+	"github.com/ZenLiuCN/fn"
 	. "github.com/ZenLiuCN/glu/v2"
 	. "github.com/yuin/gopher-lua"
 )
@@ -32,20 +33,45 @@ func init() {
 		return nil, ""
 	}
 	JsonModule = NewModule("json", `json is wrap of jeffail/gabs as dynamic json tool.`, true).
-		AddFunc("of", "(string?)json.Json? => same as json.Json.new()", func(s *LState) int {
-			if s.GetTop() == 1 {
-				v, err := ParseJSON([]byte(s.CheckString(1)))
-				if err != nil {
-					s.ArgError(1, "invalid JSON string")
+		AddFunc("of", `(val table|number|string|boolean)Json ==> create json from value`,
+			func(s *LState) int {
+				s.CheckTypes(1, LTString, LTNumber, LTBool, LTTable)
+				v := s.Get(1)
+				switch v.Type() {
+				case LTString:
+					g := New()
+					_, _ = g.Set(s.ToString(1))
+					return JsonType.New(s, g)
+				case LTNumber:
+					g := New()
+					_, _ = g.Set(float64(s.ToNumber(1)))
+					return JsonType.New(s, g)
+				case LTBool:
+					g := New()
+					_, _ = g.Set(s.ToBool(1))
+					return JsonType.New(s, g)
+				case LTTable:
+					return JsonType.New(s, parseTable(s.ToTable(1), New()))
+				default:
+					s.ArgError(1, "invalid")
 					return 0
 				}
-				return JsonType.New(s, v)
-			} else if s.GetTop() != 0 {
-				s.RaiseError("bad argument for create json")
-				return 0
-			}
-			return JsonType.New(s, New())
-		})
+			}).
+		AddFunc("stringify", `stringify(Json)string => convert json to string`,
+			func(s *LState) int {
+				v, ok := JsonType.CastVar(s, 1)
+				if !ok {
+					return 0
+				}
+				s.Push(LString(v.String()))
+				return 1
+			}).
+		AddFunc("parse", `(string)Json ==> create json from value`,
+			func(s *LState) int {
+				v := s.CheckString(1)
+				g := fn.Panic1(ParseJSON([]byte(v)))
+				return JsonType.New(s, g)
+			})
 	JsonType = NewTypeCast(func(a any) (v *Container, ok bool) { v, ok = a.(*Container); return }, "Json", `JSON object`, false, `(json string?)Json? ==> create Json instance.`,
 		func(s *LState) (*Container, bool) {
 			if s.GetTop() == 1 {
@@ -92,30 +118,6 @@ func init() {
 				p, _ := checkPath(s, v, 0)
 				s.Push(LBool(p != nil))
 				return 1
-			}).
-		AddMethodCast("at", `(key int|string)Json?  ==> fetch value at index for array or key for object.`,
-			func(s *LState, v *Container) int {
-
-				s.CheckTypes(2, LTString, LTNumber)
-				p := s.Get(2)
-				if p.Type() == LTString {
-					x := p.String()
-					if v.ExistsP(x) {
-						return JsonType.New(s, v.Path(x))
-					} else {
-						s.Push(LNil)
-						return 1
-					}
-				} else if p.Type() == LTNumber {
-					i := int(p.(LNumber))
-					x := v.Index(i)
-					if x == nil {
-						s.Push(LNil)
-						return 1
-					}
-					return JsonType.New(s, x)
-				}
-				return 0
 			}).
 		AddMethodCast("get", `(key int|string)Json?  ==> fetch value at index for array or key for object.`,
 			func(s *LState, v *Container) int {
@@ -369,36 +371,13 @@ func init() {
 					s.Push(LNumber(1))
 				}
 				return 1
-			})
-
-	JsonModule.
-		AddFunc("from", `(val table|number|string|boolean)Json ==> create json from value`,
-			func(s *LState) int {
-				s.CheckTypes(1, LTString, LTNumber, LTBool, LTTable)
-				v := s.Get(1)
-				switch v.Type() {
-				case LTString:
-					g := New()
-					_, _ = g.Set(s.ToString(1))
-					return JsonType.New(s, g)
-				case LTNumber:
-					g := New()
-					_, _ = g.Set(float64(s.ToNumber(1)))
-					return JsonType.New(s, g)
-				case LTBool:
-					g := New()
-					_, _ = g.Set(s.ToBool(1))
-					return JsonType.New(s, g)
-				case LTTable:
-					return JsonType.New(s, parseTable(s.ToTable(1), New()))
-				default:
-					s.ArgError(1, "invalid")
-					return 0
-				}
 			}).
-		AddModule(JsonType)
+		OverrideCast(OPERATE_TO_STRING, `Json:json()`, func(s *LState, i *Container) int {
+			s.Push(LString(i.String()))
+			return 1
+		})
 
-	Success(Register(JsonModule))
+	fn.Panic(Register(JsonModule.AddModule(JsonType)))
 
 }
 func parseTable(t *LTable, g *Container) *Container {

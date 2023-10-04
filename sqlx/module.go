@@ -62,7 +62,7 @@ func init() {
 			return 1
 		}).
 		AddFunc(`to_num`, `to_num(Json,string ...)Json => convert json array fields from base64 to numeric string`, func(s *lua.LState) int {
-			g, ok := json.JsonType.CastVar(s, 1)
+			g, ok := json.Type.CastVar(s, 1)
 			if !ok {
 				return 0
 			}
@@ -96,10 +96,10 @@ func init() {
 					}
 				}
 			}
-			return json.JsonType.New(s, g)
+			return json.Type.New(s, g)
 		}).
 		AddFunc(`from_num`, `from_num(Json,string ...)Json => convert json array fields from numeric string to base64`, func(s *lua.LState) int {
-			g, ok := json.JsonType.CastVar(s, 1)
+			g, ok := json.Type.CastVar(s, 1)
 			if !ok {
 				return 0
 			}
@@ -131,7 +131,7 @@ func init() {
 					}
 				}
 			}
-			return json.JsonType.New(s, g)
+			return json.Type.New(s, g)
 		})
 	SqlxDBType = NewTypeCast[*sqlx.DB](func(a any) (v *sqlx.DB, ok bool) { v, ok = a.(*sqlx.DB); return }, `DB`, `sqlx.DB wrapper`, false, `new(driver:string,dsn:string)sqlx.DB`,
 		func(s *lua.LState) (v *sqlx.DB, ok bool) {
@@ -159,7 +159,7 @@ func init() {
 				var r *sqlx.Rows
 				var err error
 				if s.GetTop() == 3 {
-					if j, ok := json.JsonType.CastVar(s, 3); ok {
+					if j, ok := json.Type.CastVar(s, 3); ok {
 						if m, ok := j.Data().(map[string]any); ok {
 							r, err = data.NamedQuery(q, m)
 						} else if i1, ok := j.Data().([]any); ok {
@@ -193,7 +193,7 @@ func init() {
 					}
 					fn.Panic(rs.ArrayAppend(m))
 				}
-				return json.JsonType.New(s, rs)
+				return json.Type.New(s, rs)
 			})
 		}).
 		AddMethodCast(`exec`, `exec(string,Json?)Result => exec SQL`, func(s *lua.LState, data *sqlx.DB) int {
@@ -204,7 +204,7 @@ func init() {
 			var r sql.Result
 			var err error
 			if s.GetTop() == 3 {
-				if j, ok := json.JsonType.CastVar(s, 3); ok {
+				if j, ok := json.Type.CastVar(s, 3); ok {
 					if m, ok := j.Data().(map[string]any); ok {
 						r, err = data.NamedExec(q, m)
 					} else if i1, ok := j.Data().([]any); ok {
@@ -239,7 +239,7 @@ func init() {
 					s.RaiseError("queries(SQL,array of object or array)")
 					return 0
 				}
-				if j, ok := json.JsonType.CastVar(s, 3); ok {
+				if j, ok := json.Type.CastVar(s, 3); ok {
 					if i1, ok := j.Data().([]any); ok {
 						rs := Wrap(make([]any, 0, 1))
 						for iy, val := range i1 {
@@ -273,7 +273,7 @@ func init() {
 							}
 							_ = r.Close()
 						}
-						return json.JsonType.New(s, rs)
+						return json.Type.New(s, rs)
 					}
 				}
 				s.ArgError(3, "must a json array of object or array")
@@ -291,7 +291,7 @@ func init() {
 					s.RaiseError("execs(SQL,JsonArrayOfNamedParameters)")
 					return 0
 				}
-				if j, ok := json.JsonType.CastVar(s, 3); ok {
+				if j, ok := json.Type.CastVar(s, 3); ok {
 					if i1, ok := j.Data().([]any); ok {
 						n := int64(0)
 						tx := data.MustBegin()
@@ -382,7 +382,7 @@ func init() {
 			var r sql.Result
 			var err error
 			if s.GetTop() == 3 {
-				if j, ok := json.JsonType.CastVar(s, 3); ok {
+				if j, ok := json.Type.CastVar(s, 3); ok {
 					if m, ok := j.Data().(map[string]any); ok {
 						r, err = data.NamedExec(q, m)
 					} else if i1, ok := j.Data().([]any); ok {
@@ -416,7 +416,7 @@ func init() {
 			var r *sqlx.Rows
 			var err error
 			if s.GetTop() == 3 {
-				if j, ok := json.JsonType.CastVar(s, 3); ok {
+				if j, ok := json.Type.CastVar(s, 3); ok {
 					if m, ok := j.Data().(map[string]any); ok {
 						r, err = data.NamedQuery(q, m)
 					} else if i1, ok := j.Data().([]any); ok {
@@ -450,7 +450,7 @@ func init() {
 				}
 				fn.Panic(rs.ArrayAppend(m))
 			}
-			return json.JsonType.New(s, rs)
+			return json.Type.New(s, rs)
 
 		}).
 		AddMethodCast(`queryMany`, `queryMany(string,Json)Json => query many from json array with named parameters`, func(s *lua.LState, data *sqlx.Tx) int {
@@ -463,7 +463,7 @@ func init() {
 					s.RaiseError("queries(SQL,JsonArrayOfNamedParameters)")
 					return 0
 				}
-				if j, ok := json.JsonType.CastVar(s, 3); ok {
+				if j, ok := json.Type.CastVar(s, 3); ok {
 					if i1, ok := j.Data().([]any); ok {
 						rs := Wrap(make([]any, 0, 1))
 						for iy, val := range i1 {
@@ -492,7 +492,7 @@ func init() {
 								_ = r.Close()
 							}
 						}
-						return json.JsonType.New(s, rs)
+						return json.Type.New(s, rs)
 					}
 				}
 				s.ArgError(3, "must a json array of objects")
@@ -510,7 +510,7 @@ func init() {
 					s.RaiseError("execs(SQL,JsonArrayOfNamedParameters)")
 					return 0
 				}
-				if j, ok := json.JsonType.CastVar(s, 3); ok {
+				if j, ok := json.Type.CastVar(s, 3); ok {
 					if i1, ok := j.Data().([]any); ok {
 						n := int64(0)
 						for iy, val := range i1 {
@@ -571,7 +571,7 @@ func init() {
 				var r *sqlx.Rows
 				var err error
 				if s.GetTop() == 2 {
-					if j, ok := json.JsonType.CastVar(s, 2); ok {
+					if j, ok := json.Type.CastVar(s, 2); ok {
 						if i1, ok := j.Data().([]any); ok {
 							r, err = data.Queryx(i1...)
 						} else {
@@ -603,7 +603,7 @@ func init() {
 					}
 					fn.Panic(rs.ArrayAppend(m))
 				}
-				return json.JsonType.New(s, rs)
+				return json.Type.New(s, rs)
 			})
 		}).
 		AddMethodCast(`exec`, `exec(Json?)sqlx.Result => param must a json Array`, func(s *lua.LState, data *sqlx.Stmt) int {
@@ -611,7 +611,7 @@ func init() {
 				var r sql.Result
 				var err error
 				if s.GetTop() == 2 {
-					if j, ok := json.JsonType.CastVar(s, 2); ok {
+					if j, ok := json.Type.CastVar(s, 2); ok {
 						if i1, ok := j.Data().([]any); ok {
 							r, err = data.Exec(i1...)
 						} else {
@@ -641,7 +641,7 @@ func init() {
 					s.RaiseError("queries(SQL,JsonArrayOfNamedParameters)")
 					return 0
 				}
-				if j, ok := json.JsonType.CastVar(s, 2); ok {
+				if j, ok := json.Type.CastVar(s, 2); ok {
 					if i1, ok := j.Data().([]any); ok {
 						rs := Wrap(make([]any, 0, 1))
 						for iy, val := range i1 {
@@ -670,7 +670,7 @@ func init() {
 								_ = r.Close()
 							}
 						}
-						return json.JsonType.New(s, rs)
+						return json.Type.New(s, rs)
 					}
 				}
 				s.ArgError(2, "must a json array of objects")
@@ -684,7 +684,7 @@ func init() {
 					s.RaiseError("execs(SQL,JsonArrayOfNamedParameters)")
 					return 0
 				}
-				if j, ok := json.JsonType.CastVar(s, 2); ok {
+				if j, ok := json.Type.CastVar(s, 2); ok {
 					if i1, ok := j.Data().([]any); ok {
 						n := int64(0)
 						for iy, val := range i1 {
@@ -725,7 +725,7 @@ func init() {
 					s.ArgError(3, fmt.Sprintf("argument error with %d args", s.GetTop()-1))
 					return 0
 				}
-				if j, ok := json.JsonType.CastVar(s, 2); ok {
+				if j, ok := json.Type.CastVar(s, 2); ok {
 					if m, ok := j.Data().(map[string]any); ok {
 						r, err = data.Queryx(m)
 					} else {
@@ -751,7 +751,7 @@ func init() {
 					}
 					fn.Panic(rs.ArrayAppend(m))
 				}
-				return json.JsonType.New(s, rs)
+				return json.Type.New(s, rs)
 			})
 		}).
 		AddMethodCast(`exec`, `exec(Json)sqlx.Result => param must a json Object`, func(s *lua.LState, data *sqlx.NamedStmt) int {
@@ -762,7 +762,7 @@ func init() {
 					s.ArgError(3, fmt.Sprintf("argument error with %d args", s.GetTop()-1))
 					return 0
 				}
-				if j, ok := json.JsonType.CastVar(s, 2); ok {
+				if j, ok := json.Type.CastVar(s, 2); ok {
 					if m, ok := j.Data().(map[string]any); ok {
 						r, err = data.Exec(m)
 					} else {
@@ -786,7 +786,7 @@ func init() {
 					s.RaiseError("queries(SQL,JsonArrayOfNamedParameters)")
 					return 0
 				}
-				if j, ok := json.JsonType.CastVar(s, 2); ok {
+				if j, ok := json.Type.CastVar(s, 2); ok {
 					if i1, ok := j.Data().([]any); ok {
 						rs := Wrap(make([]any, 0, 1))
 						for iy, val := range i1 {
@@ -815,7 +815,7 @@ func init() {
 								_ = r.Close()
 							}
 						}
-						return json.JsonType.New(s, rs)
+						return json.Type.New(s, rs)
 					}
 				}
 				s.ArgError(2, "must a json array of objects")
@@ -829,7 +829,7 @@ func init() {
 					s.RaiseError("execs(SQL,JsonArrayOfNamedParameters)")
 					return 0
 				}
-				if j, ok := json.JsonType.CastVar(s, 2); ok {
+				if j, ok := json.Type.CastVar(s, 2); ok {
 					if i1, ok := j.Data().([]any); ok {
 						n := int64(0)
 						for iy, val := range i1 {

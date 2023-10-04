@@ -10,22 +10,20 @@ var (
 	FmtErrType    = "required type not match at %d"
 )
 
-func Check[T any](s *lua.LState, n int, def T, cast func(v lua.LValue) (val T, ok bool)) (T, bool) {
+func Check[T any](s *lua.LState, n int, cast func(v lua.LValue) (val T, ok bool)) T {
 	if s.GetTop() < n {
 		s.RaiseError(FmtErrMissing, n)
-		return def, false
 	}
 	a, ok := cast(s.Get(n))
 	if !ok {
 		s.RaiseError(FmtErrType, n)
-		return def, false
 	}
-	return a, true
+	return a
 }
 
 // CheckString return value and true only when value exists and is string.  Otherwise, an error raised.
-func CheckString(s *lua.LState, n int) (string, bool) {
-	return Check(s, n, "", func(v lua.LValue) (val string, ok bool) {
+func CheckString(s *lua.LState, n int) string {
+	return Check(s, n, func(v lua.LValue) (val string, ok bool) {
 		if v.Type() == lua.LTString {
 			return v.String(), true
 		}
@@ -34,8 +32,8 @@ func CheckString(s *lua.LState, n int) (string, bool) {
 }
 
 // CheckBool return value and true only when value exists and is bool. Otherwise, an error raised.
-func CheckBool(s *lua.LState, n int) (bool, bool) {
-	return Check(s, n, false, func(v lua.LValue) (val bool, ok bool) {
+func CheckBool(s *lua.LState, n int) bool {
+	return Check(s, n, func(v lua.LValue) (val bool, ok bool) {
 		if v.Type() == lua.LTBool {
 			return v == lua.LTrue, true
 		}
@@ -44,8 +42,8 @@ func CheckBool(s *lua.LState, n int) (bool, bool) {
 }
 
 // CheckInt return value and true only when value exists and is exactly equals to the wanted number type. Returns converted number and false when value is number
-func CheckInt(s *lua.LState, n int) (int, bool) {
-	return Check(s, n, 0, func(v lua.LValue) (val int, ok bool) {
+func CheckInt(s *lua.LState, n int) int {
+	return Check(s, n, func(v lua.LValue) (val int, ok bool) {
 		if v.Type() == lua.LTNumber {
 			f := float64(v.(lua.LNumber))
 			i := int(f)
@@ -56,8 +54,8 @@ func CheckInt(s *lua.LState, n int) (int, bool) {
 }
 
 // CheckInt16 return value and true only when value exists and is exactly equals to the wanted number type. Returns converted number and false when value is number
-func CheckInt16(s *lua.LState, n int) (int16, bool) {
-	return Check(s, n, 0, func(v lua.LValue) (val int16, ok bool) {
+func CheckInt16(s *lua.LState, n int) int16 {
+	return Check(s, n, func(v lua.LValue) (val int16, ok bool) {
 		if v.Type() == lua.LTNumber {
 			f := float64(v.(lua.LNumber))
 			i := int16(f)
@@ -68,8 +66,8 @@ func CheckInt16(s *lua.LState, n int) (int16, bool) {
 }
 
 // CheckInt32 return value and true only when value exists and is exactly equals to the wanted number type. Returns converted number and false when value is number
-func CheckInt32(s *lua.LState, n int) (int32, bool) {
-	return Check(s, n, 0, func(v lua.LValue) (val int32, ok bool) {
+func CheckInt32(s *lua.LState, n int) int32 {
+	return Check(s, n, func(v lua.LValue) (val int32, ok bool) {
 		if v.Type() == lua.LTNumber {
 			f := float64(v.(lua.LNumber))
 			i := int32(f)
@@ -80,8 +78,8 @@ func CheckInt32(s *lua.LState, n int) (int32, bool) {
 }
 
 // CheckInt64 return value and true only when value exists and is exactly equals to the wanted number type. Returns converted number and false when value is number
-func CheckInt64(s *lua.LState, n int) (int64, bool) {
-	return Check(s, n, 0, func(v lua.LValue) (val int64, ok bool) {
+func CheckInt64(s *lua.LState, n int) int64 {
+	return Check(s, n, func(v lua.LValue) (val int64, ok bool) {
 		if v.Type() == lua.LTNumber {
 			f := float64(v.(lua.LNumber))
 			i := int64(f)
@@ -92,8 +90,8 @@ func CheckInt64(s *lua.LState, n int) (int64, bool) {
 }
 
 // CheckFloat32 return value and true only when value exists and is exactly equals to the wanted number type. Returns converted number and false when value is number
-func CheckFloat32(s *lua.LState, n int) (float32, bool) {
-	return Check(s, n, 0, func(v lua.LValue) (val float32, ok bool) {
+func CheckFloat32(s *lua.LState, n int) float32 {
+	return Check(s, n, func(v lua.LValue) (val float32, ok bool) {
 		if v.Type() == lua.LTNumber {
 			f := float64(v.(lua.LNumber))
 			i := float32(f)
@@ -104,8 +102,8 @@ func CheckFloat32(s *lua.LState, n int) (float32, bool) {
 }
 
 // CheckFloat64 return value and true only when value exists and is exactly equals to the wanted number type.
-func CheckFloat64(s *lua.LState, n int) (float64, bool) {
-	return Check(s, n, 0, func(v lua.LValue) (val float64, ok bool) {
+func CheckFloat64(s *lua.LState, n int) float64 {
+	return Check(s, n, func(v lua.LValue) (val float64, ok bool) {
 		if v.Type() == lua.LTNumber {
 			return float64(v.(lua.LNumber)), true
 		}
@@ -114,36 +112,31 @@ func CheckFloat64(s *lua.LState, n int) (float64, bool) {
 }
 
 // CheckUserData return value and true only when value exists and can cast to the wanted type. Otherwise, an error raised.
-func CheckUserData[T any](s *lua.LState, n int, def T, cast func(v any) (val T, ok bool)) (T, bool) {
+func CheckUserData[T any](s *lua.LState, n int, cast func(v any) (val T, ok bool)) T {
 	if s.GetTop() < n {
 		s.RaiseError(FmtErrMissing, n)
-		return def, false
 	}
 	v := s.Get(n)
 	if v.Type() != lua.LTUserData {
 		s.RaiseError(FmtErrType, n)
-		return def, false
 	}
 	a, ok := cast(v.(*lua.LUserData).Value)
 	if !ok {
 		s.RaiseError(FmtErrType, n)
-		return def, false
 	}
-	return a, true
+	return a
 }
 
 // CheckRecUserData check the receiver as userdata of wanted type.
-func CheckRecUserData[T any](s *lua.LState, ud *lua.LUserData, def T, cast func(v any) (val T, ok bool)) (T, bool) {
+func CheckRecUserData[T any](s *lua.LState, ud *lua.LUserData, cast func(v any) (val T, ok bool)) T {
 	if ud == nil {
 		s.RaiseError(FmtErrMissing, 1)
-		return def, false
 	}
 	a, ok := cast(ud.Value)
 	if !ok {
 		s.RaiseError(FmtErrType, 1)
-		return def, false
 	}
-	return a, true
+	return a
 }
 
 // Raise recover panic and raise error to Lua

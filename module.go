@@ -23,9 +23,6 @@ type (
 		// @fn the LGFunction
 		AddFunc(name string, help string, fn LGFunction) Module
 
-		//SafeFun warp with SafeFunc,see AddFunc for detail
-		SafeFun(name string, help string, value LGFunction) Module
-
 		// AddField add value field to this Module (static value)
 		AddField(name string, help string, value LValue) Module
 		// AddModule add submodule to this Module
@@ -179,18 +176,6 @@ func (m *Mod) AddFunc(name string, help string, fn LGFunction) Module {
 		panic(ErrAlreadyExists)
 	}
 	m.functions[name] = funcInfo{help, fn}
-	return m
-
-}
-
-//SafeFun warp with SafeFunc
-func (m *Mod) SafeFun(name string, help string, fn LGFunction) Module {
-	if m.functions == nil {
-		m.functions = make(map[string]funcInfo)
-	} else if _, ok := m.functions[name]; ok {
-		panic(ErrAlreadyExists)
-	}
-	m.functions[name] = funcInfo{help, SafeFunc(fn)}
 	return m
 
 }

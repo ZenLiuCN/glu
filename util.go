@@ -124,7 +124,7 @@ func ExecuteCode(code string, argsN, retN int, before Operator, after Operator) 
 	}
 }
 
-//TableToSlice convert LTable to a Slice with all Number index values
+// TableToSlice convert LTable to a Slice with all Number index values
 func TableToSlice(s *LTable) (r []LValue) {
 	s.ForEach(func(key LValue, value LValue) {
 		if key.Type() == LTNumber {
@@ -134,7 +134,7 @@ func TableToSlice(s *LTable) (r []LValue) {
 	return
 }
 
-//TableToMap convert LTable to a Map with all key values
+// TableToMap convert LTable to a Map with all key values
 func TableToMap(s *LTable) (r map[LValue]LValue) {
 	r = make(map[LValue]LValue)
 	s.ForEach(func(key LValue, value LValue) {
@@ -259,115 +259,12 @@ func TableUnpack(s *LTable, noLua bool, history map[LValue]any) (r map[any]any, 
 	return
 }
 
-// Recover warp a callable func with recover
-func Recover(act func()) (err error) {
-	defer func() {
-		r := recover()
-		if r != nil {
-			switch r.(type) {
-			case error:
-				err = r.(error)
-			case string:
-				err = errors.New(r.(string))
-			default:
-				err = fmt.Errorf(`%#v`, r)
-			}
-		}
-	}()
-	act()
-	return
-}
-
-// RecoverErr   warp an error supplier func with recover
-func RecoverErr(act func() error) (err error) {
-	defer func() {
-		r := recover()
-		if r != nil {
-			switch r.(type) {
-			case error:
-				err = r.(error)
-			case string:
-				err = errors.New(r.(string))
-			default:
-				err = fmt.Errorf(`%#v`, r)
-			}
-		}
-	}()
-	err = act()
-	return
-}
-
-// Success must have no error or-else throw
-func Success(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
-
-// Failed must have error or-else throw
-func Failed(err error) {
-	if err == nil {
-		panic("should fail")
-	}
-}
-
 var (
 	//ErrorSuppress not raise error ,use for SafeFunc
 	ErrorSuppress = errors.New("")
 )
 
-//SafeFunc no panic func
-func SafeFunc(fn func(state *LState) int) LGFunction {
-	return func(s *LState) (n int) {
-		defer func() {
-			if r := recover(); r != nil {
-
-				switch r.(type) {
-				case error:
-					if errors.Is(r.(error), ErrorSuppress) {
-						break
-					}
-					s.RaiseError("error:%s", r.(error).Error())
-				case string:
-					s.RaiseError("error:%s", r.(string))
-				default:
-					s.RaiseError("error:%#v", r)
-				}
-				n = 0
-			}
-		}()
-		return fn(s)
-	}
-}
-
-//SafeParam extra parameter must match type or panic,use with SafeFunc.
-func SafeParam(s *LState, start int, types ...LValueType) (r []any) {
-	for i, t := range types {
-		v := s.Get(i + start)
-		if v.Type() == t {
-			r = append(r, Raw(v))
-		}
-		s.TypeError(i+start, t)
-		panic(ErrorSuppress)
-	}
-	return
-}
-
-//SafeOpt opt param with SafeFunc
-func SafeOpt(s *LState, at int, t LValueType) any {
-	if s.GetTop() >= at {
-		v := s.Get(at)
-		if v.Type() == t {
-			return Raw(v)
-		} else {
-			s.TypeError(at, t)
-			panic(ErrorSuppress)
-		}
-	}
-	return nil
-}
-
-//Raw extract raw LValue: nil bool float64 string *LUserData *LState *LTable *LChannel
+// Raw extract raw LValue: nil bool float64 string *LUserData *LState *LTable *LChannel
 func Raw(v LValue) any {
 	switch v.Type() {
 	case LTNil:
@@ -391,13 +288,13 @@ func Raw(v LValue) any {
 	}
 }
 
-//Pack any to LValue.
+// Pack any to LValue.
 //
-//1. nil, bool, numbers and other Lua value packed as normal LValue
+// 1. nil, bool, numbers and other Lua value packed as normal LValue
 //
-//2. array, slice,map[string]any packed into LTable (the elements also packed)
+// 2. array, slice,map[string]any packed into LTable (the elements also packed)
 //
-//3. others are packed into LUserData
+// 3. others are packed into LUserData
 func Pack(v any, s *LState) LValue {
 	switch v.(type) {
 	case nil:

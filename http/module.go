@@ -3,9 +3,11 @@ package http
 import (
 	"fmt"
 	"github.com/Jeffail/gabs/v2"
+	"github.com/ZenLiuCN/fn"
 	. "github.com/ZenLiuCN/glu/v2"
 	"github.com/ZenLiuCN/glu/v2/json"
 	. "github.com/yuin/gopher-lua"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -70,13 +72,10 @@ while (true) do	end
 				return json.JsonType.New(s, body)
 			}).
 		AddMethodUserData("setHeader", `Ctx:setHeader(key,value string)Ctx ==> chain method set output header`, func(s *LState, u *LUserData) int {
-			s.CheckTypes(2, LTString)
-			s.CheckTypes(3, LTString)
-			v, ok := CtxType.CastUserData(u, s)
-			if !ok {
-				return 0
-			}
-			v.SetHeader(s.ToString(2), s.ToString(3))
+			key := s.CheckString(2)
+			value := s.CheckString(3)
+			v := CtxType.CheckUserData(u, s)
+			v.SetHeader(key, value)
 			s.Push(u)
 			return 1
 		}).
@@ -87,11 +86,7 @@ while (true) do	end
 			return 0
 		}).
 		AddMethodCast("sendJson", `Ctx:sendJson(json json.Json) ==> send json body,this will close process`, func(s *LState, v *Ctx) int {
-			g, ok := json.JsonType.CastVar(s, 2)
-			if !ok {
-				return 0
-			}
-			v.SendJson(g)
+			v.SendJson(json.JsonType.Check(s, 2))
 			return 0
 		}).
 		AddMethodCast("sendString", `Ctx:sendString(text string) ==> send text body,this will close process`, func(s *LState, v *Ctx) int {
@@ -315,12 +310,12 @@ code string) ==> register handler without method limit.`,
 				delete(ServerPool, v.ID)
 				return 0
 			}).
-		SafeFun("pool", `()int ==> current pooled server size`,
+		AddFunc("pool", `()int ==> current pooled server size`,
 			func(s *LState) int {
 				s.Push(LNumber(len(ServerPool)))
 				return 1
 			}).
-		SafeFun("poolKeys", `()[]int64 ==> current pool server keys`,
+		AddFunc("poolKeys", `()[]int64 ==> current pool server keys`,
 			func(s *LState) int {
 				t := s.NewTable()
 				n := 1
@@ -331,7 +326,7 @@ code string) ==> register handler without method limit.`,
 				s.Push(t)
 				return 1
 			}).
-		SafeFun("pooled", `(key int64)Server? ==> fetch from pool`,
+		AddFunc("pooled", `(key int64)Server? ==> fetch from pool`,
 			func(s *LState) int {
 				k := s.CheckInt64(1)
 				if v, ok := ServerPool[k]; ok {
@@ -384,7 +379,7 @@ code string) ==> register handler without method limit.`,
 		AddMethodCast("bodyJson", `()(json.Json?,string?) ==> read body as Json,body should only read once.`,
 			func(s *LState, c *http.Response) int {
 				defer c.Body.Close()
-				buf, err := ioutil.ReadAll(c.Body)
+				buf, err := io.ReadAll(c.Body)
 				if err != nil {
 					s.Push(LNil)
 					s.Push(LString(err.Error()))
@@ -480,10 +475,7 @@ code string) ==> register handler without method limit.`,
 			func(s *LState, c *Client) int {
 				m := tableToMap(s, 5)
 				m["Content-BaseType"] = "application/json"
-				g, ok := json.JsonType.CastVar(s, 4)
-				if !ok {
-					return 0
-				}
+				g := json.JsonType.Check(s, 4)
 				res, err := c.Do(
 					s.CheckString(2),
 					s.CheckString(3),
@@ -504,12 +496,12 @@ code string) ==> register handler without method limit.`,
 				delete(ClientPool, c.ID)
 				return 0
 			}).
-		SafeFun("pool", `()int ==> current in pool Client size`,
+		AddFunc("pool", `()int ==> current in pool Client size`,
 			func(s *LState) int {
 				s.Push(LNumber(len(ClientPool)))
 				return 1
 			}).
-		SafeFun("poolKeys", `()[]int64 ==> current pool Client keys`,
+		AddFunc("poolKeys", `()[]int64 ==> current pool Client keys`,
 			func(s *LState) int {
 				t := s.NewTable()
 				n := 1
@@ -520,7 +512,7 @@ code string) ==> register handler without method limit.`,
 				s.Push(t)
 				return 1
 			}).
-		SafeFun("pooled", `(key int64)Server? ==> fetch from pool`,
+		AddFunc("pooled", `(key int64)Server? ==> fetch from pool`,
 			func(s *LState) int {
 				k := s.CheckInt64(1)
 				if v, ok := ClientPool[k]; ok {
@@ -531,11 +523,8 @@ code string) ==> register handler without method limit.`,
 				return 1
 			})
 	//endregion
-	HttpModule.AddModule(CtxType)
-	HttpModule.AddModule(ServerType)
-	HttpModule.AddModule(ClientType)
-	HttpModule.AddModule(ResType)
-	Success(Register(HttpModule))
+
+	fn.Panic(Register(HttpModule.AddModule(CtxType).AddModule(ServerType).AddModule(ClientType).AddModule(ResType)))
 }
 func executeHandler(chunk *FunctionProto, c *Ctx) {
 	if err := ExecuteChunk(chunk, 1, 0, func(s *Vm) error {

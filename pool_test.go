@@ -2,6 +2,7 @@ package glu
 
 import (
 	"fmt"
+	"github.com/ZenLiuCN/fn"
 	. "github.com/chzyer/test"
 	. "github.com/yuin/gopher-lua"
 	"testing"
@@ -77,11 +78,11 @@ func TestGluI1(t *testing.T) {
 	NotNil(vm)
 	vmaddr := fmt.Sprintf("%p", vm)
 
-	Equal(LNil, vm.GetGlobal("__SOME_KEY__"))           // Passed
-	Success(vm.DoString("assert(__SOME_KEY__ == nil)")) // Passed, __SOME_KEY__ is nil in and out of lua
+	Equal(LNil, vm.GetGlobal("__SOME_KEY__"))            // Passed
+	fn.Panic(vm.DoString("assert(__SOME_KEY__ == nil)")) // Passed, __SOME_KEY__ is nil in and out of lua
 	vm.SetGlobal("__SOME_KEY__", LString("ZZZZZZ"))
-	Equal(LString("ZZZZZZ"), vm.GetGlobal("__SOME_KEY__"))   // Passed
-	Success(vm.DoString("assert(__SOME_KEY__ == 'ZZZZZZ')")) // Passed, __SOME_KEY__ is same in and out of lua
+	Equal(LString("ZZZZZZ"), vm.GetGlobal("__SOME_KEY__"))    // Passed
+	fn.Panic(vm.DoString("assert(__SOME_KEY__ == 'ZZZZZZ')")) // Passed, __SOME_KEY__ is same in and out of lua
 
 	vmPool.Put(vm) // Recycle the vm
 	vm = vmPool.Get()
@@ -92,10 +93,10 @@ func TestGluI1(t *testing.T) {
 	// Global is not reset after recycle
 	Equal(LNil, vm.GetGlobal("__SOME_KEY__")) // Assertion failed, Value still exists out of lua
 	// But I cannot find it in lua, __SOME_KEY__ is nil
-	Success(vm.DoString("assert(__SOME_KEY__ == nil)")) // Passed, Nothing in lua
+	fn.Panic(vm.DoString("assert(__SOME_KEY__ == nil)")) // Passed, Nothing in lua
 
 	// What if I set it again?
 	vm.SetGlobal("__SOME_KEY__", LString("YYYYYY"))
-	Equal(LString("YYYYYY"), vm.GetGlobal("__SOME_KEY__"))   // Passed
-	Success(vm.DoString("assert(__SOME_KEY__ == 'YYYYYY')")) // Passed
+	Equal(LString("YYYYYY"), vm.GetGlobal("__SOME_KEY__"))    // Passed
+	fn.Panic(vm.DoString("assert(__SOME_KEY__ == 'YYYYYY')")) // Passed
 }

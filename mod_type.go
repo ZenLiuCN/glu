@@ -39,24 +39,20 @@ type Type[T any] interface {
 	NewValue(l *LState, val T) *LUserData
 	// CanCast check the type can use cast (when construct with NewTypeCast)
 	CanCast() bool
-	// CastVar  cast value on stack (already have error processed)
-	CastVar(s *LState, n int) (T, bool)
-	// Cast  receiver on stack (already have error processed)
-	Cast(s *LState) (T, bool)
-	// CastUserData cast UserData (already have error processed)
-	CastUserData(ud *LUserData, s *LState) (T, bool)
+	// Check  cast value on stack (already have error processed)
+	Check(s *LState, n int) T
+	// CheckSelf  receiver on stack (already have error processed)
+	CheckSelf(s *LState) T
+	// CheckUserData cast UserData (already have error processed)
+	CheckUserData(ud *LUserData, s *LState) T
 	// Caster  cast value
 	Caster() func(any) (T, bool)
-
 	// AddFunc static function
 	AddFunc(name string, help string, fn LGFunction) Type[T]
-	//SafeFun warp with SafeFunc
-	SafeFun(name string, help string, value LGFunction) Type[T]
 
 	// AddField static field
 	AddField(name string, help string, value LValue) Type[T]
-	//SafeMethod warp with SafeFunc
-	SafeMethod(name string, help string, value LGFunction) Type[T]
+
 	// AddMethod add method to this type which means instance method.
 	AddMethod(name string, help string, value LGFunction) Type[T]
 
@@ -68,9 +64,6 @@ type Type[T any] interface {
 
 	// Override operators an operator
 	Override(op Operate, help string, fn LGFunction) Type[T]
-
-	//SafeOverride warp with SafeFunc
-	SafeOverride(op Operate, help string, value LGFunction) Type[T]
 
 	// OverrideUserData see Override and AddMethodUserData
 	OverrideUserData(op Operate, help string, act func(s *LState, u *LUserData) int) Type[T]
@@ -165,13 +158,6 @@ func (m *BaseType[T]) prepare() {
 // @fn the LGFunction
 func (m *BaseType[T]) AddFunc(name string, help string, fn LGFunction) Type[T] {
 	m.Mod.AddFunc(name, help, fn)
-	return m
-
-}
-
-//SafeFun warp with SafeFunc
-func (m *BaseType[T]) SafeFun(name string, help string, fn LGFunction) Type[T] {
-	m.Mod.AddFunc(name, help, SafeFunc(fn))
 	return m
 
 }
@@ -353,39 +339,29 @@ func (m BaseType[T]) CanCast() bool {
 	return m.caster != nil
 }
 
-// CastVar  cast value on stack
-func (m BaseType[T]) CastVar(s *LState, n int) (T, bool) {
-	u := s.CheckUserData(n)
-	if u == nil {
-		return m.defVal, false
-	}
-	v, ok := m.caster(u.Value)
+// Check  cast value on stack
+func (m BaseType[T]) Check(s *LState, n int) T {
+
+	v, ok := m.caster(s.CheckUserData(n).Value)
 	if !ok {
 		s.ArgError(n, "require type "+m.Mod.Name)
-		return m.defVal, false
 	}
-	return v, true
+	return v
 
 }
-func (m BaseType[T]) CastUserData(ud *LUserData, s *LState) (T, bool) {
+func (m BaseType[T]) CheckUserData(ud *LUserData, s *LState) T {
 	v, ok := m.caster(ud.Value)
 	if !ok {
 		s.ArgError(1, "require receiver type "+m.Mod.Name)
-		return m.defVal, false
 	}
-	return v, true
+	return v
 }
-func (m BaseType[T]) Cast(s *LState) (T, bool) {
-	u := s.CheckUserData(1)
-	if u == nil {
-		return m.defVal, false
-	}
-	v, ok := m.caster(u.Value)
+func (m BaseType[T]) CheckSelf(s *LState) T {
+	v, ok := m.caster(s.CheckUserData(1).Value)
 	if !ok {
 		s.ArgError(1, "require receiver type "+m.Mod.Name)
-		return m.defVal, false
 	}
-	return v, true
+	return v
 }
 func (m *BaseType[T]) Caster() func(any) (T, bool) {
 	return m.caster
@@ -399,17 +375,6 @@ func (m *BaseType[T]) AddMethod(name string, help string, value LGFunction) Type
 		panic(ErrAlreadyExists)
 	}
 	m.methods[name] = funcInfo{help, value}
-	return m
-}
-
-//SafeMethod warp with SafeFunc
-func (m *BaseType[T]) SafeMethod(name string, help string, value LGFunction) Type[T] {
-	if m.methods == nil {
-		m.methods = make(map[string]funcInfo)
-	} else if _, ok := m.methods[name]; ok {
-		panic(ErrAlreadyExists)
-	}
-	m.methods[name] = funcInfo{help, SafeFunc(value)}
 	return m
 }
 
@@ -437,11 +402,7 @@ func (m *BaseType[T]) AddMethodCast(name string, help string, act func(s *LState
 		panic("can't use AddMethodCast for not create with NewTypeCast")
 	}
 	return m.AddMethod(name, help, func(s *LState) int {
-		d, ok := m.Cast(s)
-		if !ok {
-			return 0
-		}
-		return act(s, d)
+		return act(s, m.CheckSelf(s))
 	})
 }
 
@@ -453,17 +414,6 @@ func (m *BaseType[T]) Override(op Operate, help string, fn LGFunction) Type[T] {
 		panic(ErrAlreadyExists)
 	}
 	m.operators[op] = funcInfo{help, fn}
-	return m
-}
-
-//SafeOverride wrap with SafeFunc
-func (m *BaseType[T]) SafeOverride(op Operate, help string, fn LGFunction) Type[T] {
-	if m.operators == nil {
-		m.operators = make(map[Operate]funcInfo)
-	} else if _, ok := m.operators[op]; ok {
-		panic(ErrAlreadyExists)
-	}
-	m.operators[op] = funcInfo{help, SafeFunc(fn)}
 	return m
 }
 
@@ -484,10 +434,6 @@ func (m *BaseType[T]) OverrideCast(op Operate, help string, act func(s *LState, 
 		panic("can't use OverrideCast for not create with NewTypeCast")
 	}
 	return m.Override(op, help, func(s *LState) int {
-		d, ok := m.CastVar(s, 1)
-		if !ok {
-			return 0
-		}
-		return act(s, d)
+		return act(s, m.CheckSelf(s))
 	})
 }

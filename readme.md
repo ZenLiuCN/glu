@@ -106,4 +106,9 @@ Those are record start at version `2.0.2`
      + when use [pgx](https://github.com/jackc/pgx/) for postgresql there will no such needs.
 4. `v2.0.5` :
    + add `sqlx:to_num` and `sqlx:from_num` to module `sqlx`, which convert json array of objects numeric fields from|to binary
+5. `v2.0.6`:
+   + **change** `json.from` as `json.of`
+   + **change** `json.of(jsonString)` as `json.parse`
+   + **add** `json.stringify(Json)string`
+   + **remove** `Json:at` use `Json:get()` instead
    
