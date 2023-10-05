@@ -651,7 +651,7 @@ func init() {
 				return Result.New(s, r)
 			})
 		}).
-		AddMethodCast(`queryMany`, `(JSON)JSON 	 query many from json array of named parameters`, func(s *lua.LState, data *sqlx.NamedStmt) int {
+		AddMethodCast(`queryMany`, `(JSON)JSON 	 query many with json array of named parameters`, func(s *lua.LState, data *sqlx.NamedStmt) int {
 			return Raise(s, func() int {
 				if s.GetTop() != 2 {
 					s.RaiseError("queries(SQL,JsonArrayOfNamedParameters)")
@@ -689,7 +689,7 @@ func init() {
 			})
 
 		}).
-		AddMethodCast(`execMany`, `(JSON)number 	 exec SQL json array of named parameters`, func(s *lua.LState, data *sqlx.NamedStmt) int {
+		AddMethodCast(`execMany`, `(JSON)number 	 exec with json array of named parameters`, func(s *lua.LState, data *sqlx.NamedStmt) int {
 			if s.GetTop() != 2 {
 				s.RaiseError("execs(SQL,JsonArrayOfNamedParameters)")
 				return 0

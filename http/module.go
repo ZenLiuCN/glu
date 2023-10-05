@@ -359,7 +359,8 @@ while (true) do	end
 
 	//region Client
 
-	CLIENT = NewTypeCast(func(a any) (v *Client, ok bool) { v, ok = a.(*Client); return }, "Client", `http.Client `, false, `(timeoutSeconds int)Client`,
+	CLIENT = NewTypeCast(func(a any) (v *Client, ok bool) { v, ok = a.(*Client); return }, "Client", `http.Client `, false,
+		`(timeoutSeconds int)Client`,
 		func(s *LState) *Client {
 			c := NewClient(time.Duration(s.CheckInt(1)) * time.Second)
 			CLIENTS[c.ID] = c

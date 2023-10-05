@@ -7,6 +7,7 @@
 package glu
 
 import (
+	"fmt"
 	. "github.com/yuin/gopher-lua"
 	"strings"
 )
@@ -22,17 +23,19 @@ type (
 		//
 		// @fn the LGFunction
 		AddFunc(name string, help string, fn LGFunction) Module
-
 		// AddField add value field to this Module (static value)
 		AddField(name string, help string, value LValue) Module
+		// AddFieldSupplier add value field to this Module (static value from a Supplier)
+		AddFieldSupplier(name string, help string, su func(s *LState) LValue) Module
 		// AddModule add submodule to this Module
 		//
 		// @mod the Mod , requires Mod.TopLevel is false.
 		AddModule(mod Modular) Module
 	}
 	fieldInfo struct {
-		Help  string
-		Value LValue
+		Help     string
+		Value    LValue
+		Supplier func(s *LState) LValue
 	}
 	funcInfo struct {
 		Help string
@@ -111,7 +114,14 @@ func (m *Mod) PreLoad(l *LState) {
 		}
 		if len(m.fields) > 0 {
 			for key, value := range m.fields {
-				l.SetField(mod, key, value.Value)
+				if value.Supplier != nil {
+					l.SetField(mod, key, value.Supplier(l))
+				} else if value.Value != LNil {
+					l.SetField(mod, key, value.Value)
+				} else {
+					panic(fmt.Errorf(`invalid field info`))
+				}
+
 			}
 		}
 		if len(m.Submodules) > 0 {
@@ -144,8 +154,13 @@ func (m *Mod) PreloadSubModule(l *LState, t *LTable) {
 	}
 	if len(m.fields) > 0 {
 		for key, value := range m.fields {
-			l.SetField(mod, key, value.Value)
-
+			if value.Supplier != nil {
+				l.SetField(mod, key, value.Supplier(l))
+			} else if value.Value != LNil {
+				l.SetField(mod, key, value.Value)
+			} else {
+				panic(fmt.Errorf(`invalid field info`))
+			}
 		}
 	}
 	if len(m.Submodules) > 0 {
@@ -193,7 +208,16 @@ func (m *Mod) AddField(name string, help string, value LValue) Module {
 	} else if _, ok := m.fields[name]; ok {
 		panic(ErrAlreadyExists)
 	}
-	m.fields[name] = fieldInfo{help, value}
+	m.fields[name] = fieldInfo{help, value, nil}
+	return m
+}
+func (m *Mod) AddFieldSupplier(name string, help string, su func(s *LState) LValue) Module {
+	if m.fields == nil {
+		m.fields = make(map[string]fieldInfo)
+	} else if _, ok := m.fields[name]; ok {
+		panic(ErrAlreadyExists)
+	}
+	m.fields[name] = fieldInfo{help, LNil, su}
 	return m
 }
 

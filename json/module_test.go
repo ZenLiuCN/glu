@@ -32,10 +32,12 @@ assert(j:get(true))
 
 }
 func TestJsonQuery2(t *testing.T) {
-	if err := ExecuteCode(`
+	if err := ExecuteCode(
+		//language=lua
+		`
 local json=require('json')
 local js='{"a":{"a1":1,"a2":true,"a3":"123"},"b":[1,2,3],"c":"c","d":1,"e":1.2,"f":true,"g":false}'
-local j=json.Json.new(js)
+local j=json.JSON.new(js)
 assert(j:json()==js)
 assert(j:get('a'):type()==5)
 assert(j:isObject('a'))
@@ -74,9 +76,12 @@ assert(j:path('x')==nil)
 	}
 }
 func TestJsonAppend1(t *testing.T) {
-	if err := ExecuteCode(`
+
+	if err := ExecuteCode(
+		//language=lua
+		`
 local json=require('json')
-local j=json.Json.new('{"a":1,"b":{"c":1}}')
+local j=json.JSON.new('{"a":1,"b":{"c":1}}')
 assert(j:append(1)==nil)
 assert(j:append("b",1)==nil)
 `, 0, 0, nil, nil); err == nil {
@@ -85,18 +90,22 @@ assert(j:append("b",1)==nil)
 
 }
 func TestJsonAppend2(t *testing.T) {
-	if err := ExecuteCode(`
+	if err := ExecuteCode(
+		//language=lua
+		`
 local json=require('json')
-local j=json.Json.new('{"a":1,"b":{"c":1}}')
+local j=json.JSON.new('{"a":1,"b":{"c":1}}')
 assert(j:append("b",1)==nil)
 `, 0, 0, nil, nil); err == nil {
 		t.Fatal("should fail")
 	}
 }
 func TestJsonAppend3(t *testing.T) {
-	if err := ExecuteCode(`
+	if err := ExecuteCode(
+		//language=lua
+		`
 local json=require('json')
-local j=json.Json.new('{"a":1}')
+local j=json.JSON.new('{"a":1}')
 assert(j:append("a",1)==nil)
 assert(j:append("a",1)==nil) 
 assert(j:append("a",true)==nil) 
@@ -108,7 +117,7 @@ assert(j:append("b",nil)==nil) print(j:json())
 assert(j:append("b",1)==nil) print(j:json())
 assert(j:append("b",2)==nil) print(j:json())
 assert(j:append("b",nil)==nil) print(j:json())
-assert(j:set("c",json.Json.new())==nil) print(j:json())
+assert(j:set("c",json.JSON.new())==nil) print(j:json())
 assert(j:append("c",1)==nil) print(j:json())
 assert(j:size("a")==6)
 `, 0, 0, nil, nil); err != nil {
@@ -116,9 +125,11 @@ assert(j:size("a")==6)
 	}
 }
 func TestJsonAppend4(t *testing.T) {
-	if err := ExecuteCode(`
+	if err := ExecuteCode(
+		//language=lua
+		`
 local json=require('json')
-local j=json.Json.new()
+local j=json.JSON.new()
 assert(j:append(1)==nil)
 assert(j:append(1)==nil) 
 assert(j:append(true)==nil) 
@@ -133,16 +144,20 @@ assert(j:size()==5)
 }
 
 func TestJsonSet(t *testing.T) {
-	if err := ExecuteCode(`
+	if err := ExecuteCode(
+		//language=lua
+		`
 local json=require('json')
-local j=json.Json.new('{"a":1}')
+local j=json.JSON.new('{"a":1}')
 assert(j:append(1)==nil)
 `, 0, 0, nil, nil); err == nil {
 		t.Fatal("should fail")
 	}
-	if err := ExecuteCode(`
+	if err := ExecuteCode(
+		//language=lua
+		`
 local json=require('json')
-local j=json.Json.new('{"a":1}')
+local j=json.JSON.new('{"a":1}')
 assert(j:set("a",1)==nil)
 assert(j:set("a",1)==nil) 
 assert(j:set("a",true)==nil) 
@@ -163,16 +178,20 @@ assert(j:set("",12)==nil) print(j:json())
 	}
 }
 func TestJsonCreate(t *testing.T) {
-	if err := ExecuteCode(`
+	if err := ExecuteCode(
+		//language=lua
+		`
 local json=require('json')
-local j=json.Json.new({1,2,3})
+local j=json.JSON.new({1,2,3})
 `, 0, 0, nil, nil); err == nil {
 		t.Fatal("should fail")
 	}
-	if err := ExecuteCode(`
+	if err := ExecuteCode(
+		//language=lua
+		`
 local json=require('json')
-local Json=json.Json
-local j=json.Json.new()
+local Json=json.JSON
+local j=json.JSON.new()
 assert(j:json()=='{}')
 assert(Json.new():json()=='{}')
 assert(Json.new('{"a":1}'):json()=='{"a":1}')
@@ -189,4 +208,26 @@ assert(tostring(json.of(true))=='true')
 		t.Fatal(err)
 	}
 
+}
+
+func TestJsonRaw(t *testing.T) {
+	if err := ExecuteCode(
+		//language=lua
+		`
+local json=require('json')
+local j=json.of({1,2,3})
+local t=j:raw()
+assert(t[1]==1)
+assert(t[2]==2)
+assert(t[3]==3)
+
+j=json.of({['a']=1,['b']=2,['c']=3})
+t=j:raw()
+print(json.of(t):json())
+assert(t['a']==1)
+assert(t['b']==2)
+assert(t['c']==3)
+`, 0, 0, nil, nil); err != nil {
+		t.Fatal(err)
+	}
 }

@@ -134,8 +134,8 @@ func helpOperatorReg(operators map[Operate]funcInfo, hasMethods bool, helps map[
 			case OPERATE_NEWINDEX:
 				name = "__newindex"
 				sym = "[]="
-			case OPERATE_TO_STRING:
-				name = "__to_string"
+			case OPERATE_TOSTRING:
+				name = "__tostring"
 				sym = "tostring"
 			case OPERATE_CALL:
 				name = "__call"

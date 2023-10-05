@@ -8,23 +8,23 @@ import (
 
 // noinspection GoSnakeCaseUsage,GoUnusedConst
 const (
-	OPERATE_INVALID   Operate = iota
-	OPERATE_ADD               // +
-	OPERATE_SUB               // -
-	OPERATE_MUL               // *
-	OPERATE_DIV               // /
-	OPERATE_UNM               // -
-	OPERATE_MOD               // %
-	OPERATE_POW               // ^
-	OPERATE_CONCAT            // ..
-	OPERATE_EQ                // ==
-	OPERATE_LT                // <
-	OPERATE_LE                // <=
-	OPERATE_LEN               // #
-	OPERATE_INDEX             // []
-	OPERATE_NEWINDEX          // []=
-	OPERATE_TO_STRING         // tostring
-	OPERATE_CALL              // ()
+	OPERATE_INVALID  Operate = iota
+	OPERATE_ADD              // +
+	OPERATE_SUB              // -
+	OPERATE_MUL              // *
+	OPERATE_DIV              // /
+	OPERATE_UNM              // -
+	OPERATE_MOD              // %
+	OPERATE_POW              // ^
+	OPERATE_CONCAT           // ..
+	OPERATE_EQ               // ==
+	OPERATE_LT               // <
+	OPERATE_LE               // <=
+	OPERATE_LEN              // #
+	OPERATE_INDEX            // []
+	OPERATE_NEWINDEX         // []=
+	OPERATE_TOSTRING         // tostring
+	OPERATE_CALL             // ()
 )
 
 type Operate int
@@ -51,7 +51,10 @@ type Type[T any] interface {
 
 	// AddField static field
 	AddField(name string, help string, value LValue) Type[T]
-
+	// AddFieldSupplier static field with supplier
+	AddFieldSupplier(name string, help string, su func(s *LState) LValue) Type[T]
+	//AddModule add sub-module
+	AddModule(mod Modular) Type[T]
 	// AddMethod add method to this type which means instance method.
 	AddMethod(name string, help string, value LGFunction) Type[T]
 
@@ -171,6 +174,10 @@ func (m *BaseType[T]) AddField(name string, help string, value LValue) Type[T] {
 	m.Mod.AddField(name, help, value)
 	return m
 }
+func (m *BaseType[T]) AddFieldSupplier(name string, help string, su func(s *LState) LValue) Type[T] {
+	m.Mod.AddFieldSupplier(name, help, su)
+	return m
+}
 
 // AddModule add sub-module to this Modular
 //
@@ -213,7 +220,13 @@ func (m *BaseType[T]) getOrBuildMeta(l *LState) *LTable {
 	}
 	if len(m.fields) > 0 {
 		for key, value := range m.fields {
-			l.SetField(mt, key, value.Value)
+			if value.Supplier != nil {
+				l.SetField(mt, key, value.Supplier(l))
+			} else if value.Value != LNil {
+				l.SetField(mt, key, value.Value)
+			} else {
+				panic(fmt.Errorf(`invalid field info`))
+			}
 		}
 	}
 	if len(m.Mod.Submodules) > 0 {
@@ -259,8 +272,8 @@ func (m *BaseType[T]) getOrBuildMeta(l *LState) *LTable {
 				name = "__len"
 			case OPERATE_NEWINDEX:
 				name = "__newindex"
-			case OPERATE_TO_STRING:
-				name = "__to_string"
+			case OPERATE_TOSTRING:
+				name = "__tostring"
 			case OPERATE_CALL:
 				name = "__call"
 			case OPERATE_INDEX:
