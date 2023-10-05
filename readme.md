@@ -4,8 +4,9 @@
 
 ### requires
 
-+ go 1.17 (as gopher-lua required): `under branch g17 with uri "github.com/ZenLiuCN/glu"`
-+ go 1.18 (with Generic): `current master with uri "github.com/ZenLiuCN/glu/v2"`
++ go 1.17 (as gopher-lua required): `under branch v1 with uri "github.com/ZenLiuCN/glu"`
++ go 1.18 (with Generic): `under branch v2 with "github.com/ZenLiuCN/glu/v2"`
++ go 1.18 (simplify API): `under branch v3 with "github.com/ZenLiuCN/glu/v3"`
 
 ## Packages
 
@@ -140,7 +141,7 @@ Those are record start at version `3.0.1`
       + `Type.Override`: override a meta function
       + `Type.OverrideUserData`: override a meta function  use UserData as receiver
       + `Type.OverrideCast`: override a meta function use specific Type as receiver,  must a Cast Type
-    + `json`
+    + `json` gabs module to process JSON
       + `json.stringify`: convert JSON to json string
       + `json.parse`: create JSON from json string
       + `json.of`: create JSON from lua value
@@ -160,7 +161,7 @@ Those are record start at version `3.0.1`
       + `JSON:size`: fetch JSON size at path,if not array or object, returns nil.
       + `JSON:raw`: fetch JSON element at path, and convert to lua value.
       + `tostring(JSON)`: convert JSON to json string.
-   + `http`
+   + `http`: mux module to access and serve http 
      + `http.Server`: the http server
      + `http.Client`: the http client
      + `http.CTX`: the http request context
@@ -211,7 +212,7 @@ Those are record start at version `3.0.1`
      + `Client.pool`:  client pool size
      + `Client.poolKeys`:  client pool keys
      + `Client.pooled`:  get client from pool by key
-   + `sqlx`
+   + `sqlx`: sqlx module to access database
      + `sqlx.DB`: sqlx database
      + `sqlx.Tx`: sqlx transaction 
      + `sqlx.Stmt`: sqlx prepared statement 
